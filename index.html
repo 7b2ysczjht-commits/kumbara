@@ -24,6 +24,10 @@
       <p class="sub">Tek tek veya toplu ekle</p>
     </header>
 
+    <button class="bank-switcher" id="bank-switcher-button" type="button">
+      🏦 <span id="active-bank-name">Kumbaram</span> ▾
+    </button>
+
     <section class="total" aria-live="polite" aria-label="Toplam birikim">
       <span>TOPLAM</span>
       <strong id="total">₺0,00</strong>
@@ -106,6 +110,13 @@
         <button type="button" data-key="0">0</button>
         <button type="button" data-key="back" aria-label="Sil">⌫</button>
       </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="banks-modal" hidden>
+    <div class="modal">
+      <h3>🏦 Kumbaralarım</h3>
+      <div id="banks-modal-body"></div>
     </div>
   </div>
 

@@ -14,6 +14,8 @@ const STORAGE = {
   counts: 'kumbara.v2.counts',
   transactions: 'kumbara.v2.transactions',
   goal: 'kumbara.v2.goal',
+  banks: 'kumbara.v2.banks',
+  activeBankId: 'kumbara.v2.activeBankId',
   legacyCounts: 'kumbaraC',
   legacyHistory: 'kumbaraH',
 };
@@ -21,10 +23,6 @@ const STORAGE = {
 const MAX_TRANSACTIONS = 500;
 const RECENT_HISTORY_COUNT = 10;
 const denominationById = new Map(DENOMINATIONS.map((item) => [item.id, item]));
-
-let counts = loadCounts();
-let transactions = loadTransactions();
-let goal = loadGoal();
 
 function money(value) {
   return `₺${value.toLocaleString('tr-TR', {
@@ -55,12 +53,6 @@ function sanitiseCounts(saved) {
   }
 
   return validCounts;
-}
-
-function loadCounts() {
-  const saved = parseStoredValue(STORAGE.counts, null)
-    ?? parseStoredValue(STORAGE.legacyCounts, {});
-  return sanitiseCounts(saved);
 }
 
 function normaliseTransaction(item) {
@@ -95,30 +87,128 @@ function sanitiseTransactions(saved) {
   return saved.map(normaliseTransaction).filter(Boolean).slice(0, MAX_TRANSACTIONS);
 }
 
-function loadTransactions() {
-  const saved = parseStoredValue(STORAGE.transactions, null)
-    ?? parseStoredValue(STORAGE.legacyHistory, []);
-  return sanitiseTransactions(saved);
-}
-
 function sanitiseGoal(value) {
   const number = Number(value);
   return Number.isFinite(number) && number > 0 ? number : null;
 }
 
-function loadGoal() {
-  return sanitiseGoal(parseStoredValue(STORAGE.goal, null));
+function makeBank(name, bankCounts = {}, bankTransactions = [], bankGoal = null) {
+  return {
+    id: crypto.randomUUID(),
+    name: (name && name.trim()) || 'Kumbaram',
+    counts: bankCounts,
+    transactions: bankTransactions,
+    goal: bankGoal,
+  };
 }
 
+function sanitiseBank(saved) {
+  return {
+    id: typeof saved?.id === 'string' ? saved.id : crypto.randomUUID(),
+    name: (typeof saved?.name === 'string' && saved.name.trim()) || 'Kumbaram',
+    counts: sanitiseCounts(saved?.counts),
+    transactions: sanitiseTransactions(saved?.transactions),
+    goal: sanitiseGoal(saved?.goal),
+  };
+}
+
+function loadBanksAndActive() {
+  const savedBanks = parseStoredValue(STORAGE.banks, null);
+  if (Array.isArray(savedBanks) && savedBanks.length) {
+    const sanitisedBanks = savedBanks.map(sanitiseBank);
+    const savedActiveId = parseStoredValue(STORAGE.activeBankId, null);
+    const activeBankId = sanitisedBanks.some((bank) => bank.id === savedActiveId)
+      ? savedActiveId
+      : sanitisedBanks[0].id;
+    return { banks: sanitisedBanks, activeBankId };
+  }
+
+  const legacyCounts = sanitiseCounts(
+    parseStoredValue(STORAGE.counts, null) ?? parseStoredValue(STORAGE.legacyCounts, {}),
+  );
+  const legacyTransactions = sanitiseTransactions(
+    parseStoredValue(STORAGE.transactions, null) ?? parseStoredValue(STORAGE.legacyHistory, []),
+  );
+  const legacyGoal = sanitiseGoal(parseStoredValue(STORAGE.goal, null));
+  const bank = makeBank('Kumbaram', legacyCounts, legacyTransactions, legacyGoal);
+  return { banks: [bank], activeBankId: bank.id };
+}
+
+let { banks, activeBankId } = loadBanksAndActive();
+
+function getActiveBank() {
+  return banks.find((bank) => bank.id === activeBankId) ?? banks[0];
+}
+
+function syncActiveBankState() {
+  const bank = getActiveBank();
+  bank.counts = counts;
+  bank.transactions = transactions;
+  bank.goal = goal;
+}
+
+let counts = getActiveBank().counts;
+let transactions = getActiveBank().transactions;
+let goal = getActiveBank().goal;
+
 function save() {
+  syncActiveBankState();
   try {
-    localStorage.setItem(STORAGE.counts, JSON.stringify(counts));
-    localStorage.setItem(STORAGE.transactions, JSON.stringify(transactions));
-    localStorage.setItem(STORAGE.goal, JSON.stringify(goal));
+    localStorage.setItem(STORAGE.banks, JSON.stringify(banks));
+    localStorage.setItem(STORAGE.activeBankId, JSON.stringify(activeBankId));
   } catch {
     // The current session continues even when browser storage is unavailable.
   }
   pushToCloud();
+}
+
+function loadActiveBankState() {
+  const bank = getActiveBank();
+  counts = bank.counts;
+  transactions = bank.transactions;
+  goal = bank.goal;
+}
+
+function updateActiveBankLabel() {
+  const label = document.getElementById('active-bank-name');
+  if (label) label.textContent = getActiveBank().name;
+}
+
+function switchBank(id) {
+  syncActiveBankState();
+  activeBankId = id;
+  loadActiveBankState();
+  save();
+  draw();
+  updateActiveBankLabel();
+}
+
+function createBank(name) {
+  syncActiveBankState();
+  const bank = makeBank(name || `Kumbara ${banks.length + 1}`);
+  banks.push(bank);
+  switchBank(bank.id);
+}
+
+function deleteBank(id) {
+  if (banks.length <= 1) return;
+  const wasActive = id === activeBankId;
+  banks = banks.filter((bank) => bank.id !== id);
+  if (wasActive) {
+    activeBankId = banks[0].id;
+    loadActiveBankState();
+  }
+  save();
+  draw();
+  updateActiveBankLabel();
+}
+
+function renameBank(id, name) {
+  const bank = banks.find((item) => item.id === id);
+  if (!bank || !name.trim()) return;
+  bank.name = name.trim();
+  save();
+  updateActiveBankLabel();
 }
 
 function updateCount(denominationId, change) {
@@ -644,9 +734,8 @@ async function pushToCloud() {
   if (!currentUser || suppressCloudWrite) return;
   try {
     await cloudDocRef().set({
-      counts,
-      transactions,
-      goal,
+      banks,
+      activeBankId,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
   } catch {
@@ -723,11 +812,16 @@ auth.onAuthStateChanged(async (user) => {
     if (!snapshot.exists) return;
     const data = snapshot.data() || {};
     suppressCloudWrite = true;
-    counts = sanitiseCounts(data.counts);
-    transactions = sanitiseTransactions(data.transactions);
-    goal = sanitiseGoal(data.goal);
+
+    banks = Array.isArray(data.banks) && data.banks.length
+      ? data.banks.map(sanitiseBank)
+      : [makeBank('Kumbaram', sanitiseCounts(data.counts), sanitiseTransactions(data.transactions), sanitiseGoal(data.goal))];
+    activeBankId = banks.some((bank) => bank.id === data.activeBankId) ? data.activeBankId : banks[0].id;
+    loadActiveBankState();
+
     save();
     draw();
+    updateActiveBankLabel();
     suppressCloudWrite = false;
   });
 });
@@ -791,3 +885,90 @@ if ('serviceWorker' in navigator) {
     });
   });
 }
+
+function bankTotal(bank) {
+  return DENOMINATIONS.reduce(
+    (sum, denomination) => sum + (bank.counts[denomination.id] ?? 0) * denomination.value,
+    0,
+  );
+}
+
+function closeBanksModal() {
+  document.getElementById('banks-modal').hidden = true;
+}
+
+function renderBanksModalBody() {
+  syncActiveBankState();
+  const body = document.getElementById('banks-modal-body');
+
+  const rows = banks.map((bank) => `
+    <div class="bank-row" data-bank-id="${bank.id}">
+      <div class="bank-row-main" data-action="switch">
+        <span class="bank-row-name">${bank.id === activeBankId ? '✓ ' : ''}${bank.name}</span>
+        <span class="bank-row-total">${money(bankTotal(bank))}</span>
+      </div>
+      <div class="bank-row-actions">
+        <button type="button" class="bank-row-btn" data-action="rename" aria-label="Adını değiştir">✏️</button>
+        ${banks.length > 1 ? '<button type="button" class="bank-row-btn" data-action="delete" aria-label="Sil">🗑️</button>' : ''}
+      </div>
+    </div>`).join('');
+
+  body.innerHTML = `
+    <div class="bank-list">${rows}</div>
+    <label for="new-bank-input">Yeni kumbara adı</label>
+    <input type="text" id="new-bank-input" maxlength="30" placeholder="Örn. Tatil">
+    <div class="modal-actions">
+      <button class="modal-cancel" type="button" id="banks-modal-close">Kapat</button>
+      <button class="modal-save" type="button" id="banks-modal-add">Ekle</button>
+    </div>`;
+
+  document.getElementById('banks-modal-close').addEventListener('click', closeBanksModal);
+  document.getElementById('banks-modal-add').addEventListener('click', () => {
+    const input = document.getElementById('new-bank-input');
+    const name = input.value.trim();
+    if (!name) {
+      input.focus();
+      return;
+    }
+    createBank(name);
+    closeBanksModal();
+  });
+
+  document.querySelectorAll('.bank-row').forEach((row) => {
+    const id = row.dataset.bankId;
+    row.querySelector('[data-action="switch"]').addEventListener('click', () => {
+      switchBank(id);
+      closeBanksModal();
+    });
+    row.querySelector('[data-action="rename"]').addEventListener('click', () => {
+      const bank = banks.find((item) => item.id === id);
+      const name = window.prompt('Yeni ad:', bank.name);
+      if (name && name.trim()) {
+        renameBank(id, name);
+        renderBanksModalBody();
+      }
+    });
+    const deleteButton = row.querySelector('[data-action="delete"]');
+    if (deleteButton) {
+      deleteButton.addEventListener('click', () => {
+        const bank = banks.find((item) => item.id === id);
+        const confirmed = window.confirm(`"${bank.name}" kumbarasını silmek istediğine emin misin? Bu işlem geri alınamaz.`);
+        if (!confirmed) return;
+        deleteBank(id);
+        renderBanksModalBody();
+      });
+    }
+  });
+}
+
+function openBanksModal() {
+  renderBanksModalBody();
+  document.getElementById('banks-modal').hidden = false;
+}
+
+document.getElementById('bank-switcher-button').addEventListener('click', openBanksModal);
+document.getElementById('banks-modal').addEventListener('click', (event) => {
+  if (event.target.id === 'banks-modal') closeBanksModal();
+});
+
+updateActiveBankLabel();
