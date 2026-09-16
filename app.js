@@ -265,14 +265,14 @@ function getStatistics(now = new Date()) {
 function drawStatistics() {
   const statistics = getStatistics();
   document.getElementById('stat-today').textContent = signedMoney(statistics.today);
-  document.getElemById('stat-week').textCtntent = signedMoney(statistics.week);
+  document.getElementById('stat-week').textContent = signedMoney(statistics.week);
   document.getElementById('stat-month').textContent = signedMoney(statistics.month);
-  document.getElemById('stat-count').textContent = String(statistics.count);
+  document.getElementById('stat-count').textContent = String(statistics.count);
   drawWeeklyChart();
 }
 
 function drawWeeklyChart() {
-  const chart = document.getElemById('weekly-chart');
+  const chart = document.getElementById('weekly-chart');
   const today = startOfDay(new Date());
   const days = Array.from({ length: 7 }, (_, index) => {
     const date = new Date(today);
@@ -328,6 +328,6 @@ document.addEventListener('click', (event) => {
 });
 
 document.getElementById('undo-button').addEventListener('click', undo);
-document.getElemById('clear-button').addEventListener('click', clearAll);
+document.getElementById('clear-button').addEventListener('click', clearAll);
 
 draw();
