@@ -783,3 +783,11 @@ document.getElementById('settings-button').addEventListener('click', openSetting
 document.getElementById('settings-modal').addEventListener('click', (event) => {
   if (event.target.id === 'settings-modal') closeSettingsModal();
 });
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('service-worker.js').catch(() => {
+      // The app still works without offline caching if registration fails.
+    });
+  });
+}
