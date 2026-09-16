@@ -1008,6 +1008,10 @@ function renderSettingsModalBody() {
       <span class="settings-row-label">☁️ Bulut Senkronizasyonu</span>
       <span class="settings-row-value">${cloudStatus}</span>
     </div>
+    <div class="settings-row clickable" id="settings-reminder-row">
+      <span class="settings-row-label">🔔 Hatırlatıcı</span>
+      <span class="settings-row-value">${isReminderEnabled() ? 'Açık' : 'Kapalı'}</span>
+    </div>
     <div class="modal-actions">
       <button class="modal-cancel" type="button" id="settings-modal-close">Kapat</button>
     </div>`;
@@ -1024,6 +1028,19 @@ function renderSettingsModalBody() {
   document.getElementById('settings-cloud-row').addEventListener('click', () => {
     closeSettingsModal();
     openCloudModal();
+  });
+  document.getElementById('settings-reminder-row').addEventListener('click', async () => {
+    const next = !isReminderEnabled();
+    setReminderEnabled(next);
+    if (next && 'Notification' in window && Notification.permission === 'default') {
+      try {
+        await Notification.requestPermission();
+      } catch {
+        // The reminder still works as an in-app banner without OS notification permission.
+      }
+    }
+    renderSettingsModalBody();
+    checkDailyReminder();
   });
 }
 
@@ -1214,3 +1231,53 @@ document.getElementById('export-pdf-button').addEventListener('click', () => {
   exportPdf();
   closeExportModal();
 });
+
+const REMINDER_KEY = 'kumbara.v2.reminderEnabled';
+
+function isReminderEnabled() {
+  return parseStoredValue(REMINDER_KEY, false) === true;
+}
+
+function setReminderEnabled(value) {
+  try {
+    localStorage.setItem(REMINDER_KEY, JSON.stringify(value));
+  } catch {
+    // The toggle just won't persist across reloads when storage is unavailable.
+  }
+}
+
+function bankHasAddOnDay(bank, day) {
+  return bank.transactions.some((transaction) => {
+    if (transaction.type !== 'add' || !transaction.createdAt) return false;
+    const date = new Date(transaction.createdAt);
+    return !Number.isNaN(date.valueOf()) && startOfDay(date).valueOf() === day.valueOf();
+  });
+}
+
+function hasAnyBankAddToday() {
+  const today = startOfDay(new Date());
+  return banks.some((bank) => bankHasAddOnDay(bank, today));
+}
+
+function showReminderBanner() {
+  document.getElementById('reminder-banner').hidden = false;
+}
+
+document.getElementById('reminder-dismiss').addEventListener('click', () => {
+  document.getElementById('reminder-banner').hidden = true;
+});
+
+function checkDailyReminder() {
+  if (!isReminderEnabled() || hasAnyBankAddToday()) return;
+
+  showReminderBanner();
+  if ('Notification' in window && Notification.permission === 'granted') {
+    try {
+      new Notification('🐱 Kumbara Hatırlatması', { body: 'Bugün henüz kumbaraya para eklemedin!' });
+    } catch {
+      // Some browsers only allow notifications through a service worker registration.
+    }
+  }
+}
+
+checkDailyReminder();

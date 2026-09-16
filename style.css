@@ -485,6 +485,33 @@ h2 { margin-top: 28px; }
 
 .settings-row-value { color: var(--text-muted); font-size: 13px; }
 
+.reminder-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 12px 14px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  border-radius: 14px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.reminder-banner[hidden] { display: none; }
+
+.reminder-banner button {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.2);
+  color: inherit;
+  font-size: 13px;
+}
+
 .bank-switcher {
   display: block;
   margin: 14px auto 0;
