@@ -12,6 +12,7 @@
 <body>
   <main class="app">
     <header>
+      <button class="pin-toggle" id="pin-settings-button" type="button" aria-label="Kilit ayarları">🔓</button>
       <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Temayı değiştir">🌙</button>
       <h1>🐷 Mobil Kumbara</h1>
       <p class="sub">Tek tek veya toplu ekle</p>
@@ -73,6 +74,41 @@
       <div id="history"></div>
     </section>
   </main>
+
+  <div class="lock-screen" id="lock-screen" hidden>
+    <div class="lock-content">
+      <div class="lock-icon">🐷</div>
+      <p class="lock-title">Kumbara kilitli</p>
+      <div class="pin-dots" id="pin-dots">
+        <span class="pin-dot"></span>
+        <span class="pin-dot"></span>
+        <span class="pin-dot"></span>
+        <span class="pin-dot"></span>
+      </div>
+      <p class="lock-error" id="lock-error" hidden>Yanlış PIN, tekrar dene</p>
+      <div class="keypad" id="keypad">
+        <button type="button" data-key="1">1</button>
+        <button type="button" data-key="2">2</button>
+        <button type="button" data-key="3">3</button>
+        <button type="button" data-key="4">4</button>
+        <button type="button" data-key="5">5</button>
+        <button type="button" data-key="6">6</button>
+        <button type="button" data-key="7">7</button>
+        <button type="button" data-key="8">8</button>
+        <button type="button" data-key="9">9</button>
+        <button type="button" class="keypad-empty" tabindex="-1" disabled></button>
+        <button type="button" data-key="0">0</button>
+        <button type="button" data-key="back" aria-label="Sil">⌫</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="pin-modal" hidden>
+    <div class="modal">
+      <h3>🔒 PIN Kilidi</h3>
+      <div id="pin-modal-body"></div>
+    </div>
+  </div>
 
   <div class="modal-overlay" id="goal-modal" hidden>
     <div class="modal">

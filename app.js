@@ -453,3 +453,164 @@ document.getElementById('theme-toggle').addEventListener('click', () => {
 
 applyTheme();
 draw();
+
+const PIN_KEY = 'kumbara.v2.pinHash';
+
+async function sha256Hex(text) {
+  const bytes = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function hasPin() {
+  try {
+    return localStorage.getItem(PIN_KEY) !== null;
+  } catch {
+    return false;
+  }
+}
+
+async function setPin(pin) {
+  const hash = await sha256Hex(pin);
+  try {
+    localStorage.setItem(PIN_KEY, hash);
+  } catch {
+    // PIN just won't persist across reloads when storage is unavailable.
+  }
+}
+
+function removePin() {
+  try {
+    localStorage.removeItem(PIN_KEY);
+  } catch {
+    // Nothing to clean up when storage is unavailable.
+  }
+}
+
+async function verifyPin(pin) {
+  const hash = await sha256Hex(pin);
+  try {
+    return localStorage.getItem(PIN_KEY) === hash;
+  } catch {
+    return false;
+  }
+}
+
+function updatePinButton() {
+  document.getElementById('pin-settings-button').textContent = hasPin() ? '🔒' : '🔓';
+}
+
+let pinBuffer = '';
+
+function updatePinDots() {
+  document.querySelectorAll('.pin-dot').forEach((dot, index) => {
+    dot.classList.toggle('filled', index < pinBuffer.length);
+  });
+}
+
+function showLockScreen() {
+  document.getElementById('lock-screen').hidden = false;
+}
+
+function hideLockScreen() {
+  document.getElementById('lock-screen').hidden = true;
+}
+
+async function handlePinKey(key) {
+  const errorEl = document.getElementById('lock-error');
+
+  if (key === 'back') {
+    pinBuffer = pinBuffer.slice(0, -1);
+    errorEl.hidden = true;
+    updatePinDots();
+    return;
+  }
+
+  if (pinBuffer.length >= 4) return;
+  pinBuffer += key;
+  updatePinDots();
+
+  if (pinBuffer.length !== 4) return;
+
+  const ok = await verifyPin(pinBuffer);
+  pinBuffer = '';
+
+  if (ok) {
+    updatePinDots();
+    hideLockScreen();
+    return;
+  }
+
+  errorEl.hidden = false;
+  const dotsEl = document.getElementById('pin-dots');
+  dotsEl.classList.remove('shake');
+  void dotsEl.offsetWidth;
+  dotsEl.classList.add('shake');
+  updatePinDots();
+}
+
+document.getElementById('keypad').addEventListener('click', (event) => {
+  const button = event.target.closest('button[data-key]');
+  if (!button) return;
+  handlePinKey(button.dataset.key);
+});
+
+function closePinModal() {
+  document.getElementById('pin-modal').hidden = true;
+}
+
+function renderPinModalBody() {
+  const body = document.getElementById('pin-modal-body');
+
+  if (hasPin()) {
+    body.innerHTML = `
+      <p class="modal-text">PIN kilidi aktif. Kumbara her açılışta PIN isteyecek.</p>
+      <div class="modal-actions">
+        <button class="modal-cancel" type="button" id="pin-modal-close">Kapat</button>
+        <button class="modal-danger" type="button" id="pin-modal-remove">Kilidi Kaldır</button>
+      </div>`;
+    document.getElementById('pin-modal-close').addEventListener('click', closePinModal);
+    document.getElementById('pin-modal-remove').addEventListener('click', () => {
+      removePin();
+      updatePinButton();
+      closePinModal();
+    });
+    return;
+  }
+
+  body.innerHTML = `
+    <label for="new-pin-input">Yeni PIN (4 haneli)</label>
+    <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" id="new-pin-input" placeholder="••••">
+    <label for="confirm-pin-input">PIN (tekrar)</label>
+    <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" id="confirm-pin-input" placeholder="••••">
+    <p class="modal-error" id="pin-modal-error" hidden>PIN 4 haneli olmalı ve eşleşmeli.</p>
+    <div class="modal-actions">
+      <button class="modal-cancel" type="button" id="pin-modal-close">Vazgeç</button>
+      <button class="modal-save" type="button" id="pin-modal-save">Kaydet</button>
+    </div>`;
+  document.getElementById('pin-modal-close').addEventListener('click', closePinModal);
+  document.getElementById('pin-modal-save').addEventListener('click', async () => {
+    const a = document.getElementById('new-pin-input').value;
+    const b = document.getElementById('confirm-pin-input').value;
+    if (!/^\d{4}$/.test(a) || a !== b) {
+      document.getElementById('pin-modal-error').hidden = false;
+      return;
+    }
+    await setPin(a);
+    updatePinButton();
+    closePinModal();
+  });
+}
+
+function openPinModal() {
+  renderPinModalBody();
+  document.getElementById('pin-modal').hidden = false;
+}
+
+document.getElementById('pin-settings-button').addEventListener('click', openPinModal);
+document.getElementById('pin-modal').addEventListener('click', (event) => {
+  if (event.target.id === 'pin-modal') closePinModal();
+});
+
+updatePinButton();
+if (hasPin()) showLockScreen();

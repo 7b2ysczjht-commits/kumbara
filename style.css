@@ -98,22 +98,22 @@ input:focus-visible {
 
 header {
   position: relative;
-  padding: 0 46px;
+  padding: 0 92px;
 }
 
 h1,
 .sub { text-align: center; }
 
-h1 { margin: 0; font-size: clamp(20px, 7vw, 32px); }
+h1 { margin: 0; font-size: clamp(18px, 6.5vw, 32px); }
 
 h2 { margin-top: 28px; }
 
 .sub { margin: 12px 0 0; color: var(--text-muted); }
 
-.theme-toggle {
+.theme-toggle,
+.pin-toggle {
   position: absolute;
   top: 0;
-  right: 0;
   width: 38px;
   height: 38px;
   border: 0;
@@ -121,6 +121,10 @@ h2 { margin-top: 28px; }
   border-radius: 12px;
   font-size: 17px;
 }
+
+.theme-toggle { right: 0; }
+
+.pin-toggle { right: 46px; font-size: 16px; }
 
 .total {
   display: grid;
@@ -389,6 +393,18 @@ h2 { margin-top: 28px; }
   color: var(--text-muted);
 }
 
+.modal label:not(:first-child) { margin-top: 14px; }
+
+.modal-text { margin: 0 0 4px; font-size: 14px; color: var(--text); }
+
+.modal-error {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--danger);
+}
+
+.modal-error[hidden] { display: none; }
+
 .modal input {
   width: 100%;
   height: 44px;
@@ -416,6 +432,93 @@ h2 { margin-top: 28px; }
 .modal-cancel { color: var(--text); background: var(--chip-bg); }
 
 .modal-save { color: var(--accent-contrast); background: var(--accent); }
+
+.modal-danger { color: #ffffff; background: var(--danger); }
+
+.lock-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+}
+
+.lock-screen[hidden] { display: none; }
+
+.lock-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  padding: 20px;
+}
+
+.lock-icon { font-size: 48px; }
+
+.lock-title { margin: 0; color: var(--text-muted); }
+
+.pin-dots { display: flex; gap: 14px; }
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-8px); }
+  40%, 80% { transform: translateX(8px); }
+}
+
+.pin-dots.shake { animation: shake 0.4s ease; }
+
+.pin-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--text-muted);
+  background: transparent;
+}
+
+.pin-dot.filled { background: var(--accent); border-color: var(--accent); }
+
+.lock-error {
+  margin: 0;
+  font-size: 13px;
+  color: var(--danger);
+}
+
+.lock-error[hidden] { display: none; }
+
+.keypad {
+  display: grid;
+  grid-template-columns: repeat(3, 64px);
+  gap: 14px;
+}
+
+.keypad button {
+  width: 64px;
+  height: 64px;
+  border: 0;
+  border-radius: 50%;
+  color: var(--text);
+  background: var(--card-bg);
+  font-size: 20px;
+}
+
+.keypad-empty { visibility: hidden; }
+
+@media (max-width: 400px) {
+  header { padding: 0 60px; }
+
+  h1 { font-size: clamp(15px, 5.8vw, 32px); }
+
+  .theme-toggle,
+  .pin-toggle {
+    width: 30px;
+    height: 30px;
+    font-size: 13px;
+  }
+
+  .pin-toggle { right: 34px; }
+}
 
 @media (max-width: 360px) {
   .grid { grid-template-columns: 1fr; }
