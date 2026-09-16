@@ -46,9 +46,7 @@ function parseStoredValue(key, fallback) {
   }
 }
 
-function loadCounts() {
-  const saved = parseStoredValue(STORAGE.counts, null)
-    ?? parseStoredValue(STORAGE.legacyCounts, {});
+function sanitiseCounts(saved) {
   const validCounts = {};
 
   for (const { id } of DENOMINATIONS) {
@@ -57,6 +55,12 @@ function loadCounts() {
   }
 
   return validCounts;
+}
+
+function loadCounts() {
+  const saved = parseStoredValue(STORAGE.counts, null)
+    ?? parseStoredValue(STORAGE.legacyCounts, {});
+  return sanitiseCounts(saved);
 }
 
 function normaliseTransaction(item) {
@@ -86,16 +90,24 @@ function normaliseTransaction(item) {
   };
 }
 
-function loadTransactions() {
-  const saved = parseStoredValue(STORAGE.transactions, null)
-    ?? parseStoredValue(STORAGE.legacyHistory, []);
+function sanitiseTransactions(saved) {
   if (!Array.isArray(saved)) return [];
   return saved.map(normaliseTransaction).filter(Boolean).slice(0, MAX_TRANSACTIONS);
 }
 
+function loadTransactions() {
+  const saved = parseStoredValue(STORAGE.transactions, null)
+    ?? parseStoredValue(STORAGE.legacyHistory, []);
+  return sanitiseTransactions(saved);
+}
+
+function sanitiseGoal(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : null;
+}
+
 function loadGoal() {
-  const value = Number(parseStoredValue(STORAGE.goal, null));
-  return Number.isFinite(value) && value > 0 ? value : null;
+  return sanitiseGoal(parseStoredValue(STORAGE.goal, null));
 }
 
 function save() {
@@ -106,6 +118,7 @@ function save() {
   } catch {
     // The current session continues even when browser storage is unavailable.
   }
+  pushToCloud();
 }
 
 function updateCount(denominationId, change) {
@@ -614,3 +627,124 @@ document.getElementById('pin-modal').addEventListener('click', (event) => {
 
 updatePinButton();
 if (hasPin()) showLockScreen();
+
+const firebaseConfig = {
+  apiKey: 'AIzaSyDafoqx2XQtP9a2LOJHHXe31thNAXXsSys',
+  authDomain: 'kumbara-2100b.firebaseapp.com',
+  projectId: 'kumbara-2100b',
+  storageBucket: 'kumbara-2100b.firebasestorage.app',
+  messagingSenderId: '900589655192',
+  appId: '1:900589655192:web:522470fabb6b003a032ced',
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const firestore = firebase.firestore();
+
+let currentUser = null;
+let suppressCloudWrite = false;
+let unsubscribeCloud = null;
+
+function cloudDocRef() {
+  return firestore.collection('users').doc(currentUser.uid);
+}
+
+async function pushToCloud() {
+  if (!currentUser || suppressCloudWrite) return;
+  try {
+    await cloudDocRef().set({
+      counts,
+      transactions,
+      goal,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch {
+    // Offline or blocked — the local copy stays authoritative until the next successful sync.
+  }
+}
+
+function updateCloudButton() {
+  const button = document.getElementById('cloud-settings-button');
+  button.classList.toggle('synced', Boolean(currentUser));
+  button.textContent = currentUser ? '🔄' : '☁️';
+}
+
+function closeCloudModal() {
+  document.getElementById('cloud-modal').hidden = true;
+}
+
+function renderCloudModalBody() {
+  const body = document.getElementById('cloud-modal-body');
+
+  if (currentUser) {
+    const name = currentUser.displayName || currentUser.email || 'Google hesabı';
+    body.innerHTML = `
+      <p class="modal-text">${name} olarak bağlısın. Birikimlerin cihazlar arasında otomatik senkronize ediliyor.</p>
+      <div class="modal-actions">
+        <button class="modal-cancel" type="button" id="cloud-modal-close">Kapat</button>
+        <button class="modal-danger" type="button" id="cloud-modal-signout">Çıkış Yap</button>
+      </div>`;
+    document.getElementById('cloud-modal-close').addEventListener('click', closeCloudModal);
+    document.getElementById('cloud-modal-signout').addEventListener('click', () => {
+      auth.signOut();
+      closeCloudModal();
+    });
+    return;
+  }
+
+  body.innerHTML = `
+    <p class="modal-text">Google ile giriş yaparak birikimlerini buluta yedekleyip birden fazla cihazdan eriş.</p>
+    <div class="modal-actions">
+      <button class="modal-cancel" type="button" id="cloud-modal-close">Vazgeç</button>
+      <button class="modal-save" type="button" id="cloud-modal-signin">Google ile Giriş Yap</button>
+    </div>`;
+  document.getElementById('cloud-modal-close').addEventListener('click', closeCloudModal);
+  document.getElementById('cloud-modal-signin').addEventListener('click', async () => {
+    try {
+      await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
+      closeCloudModal();
+    } catch {
+      // The user closed the popup or the sign-in failed — they can just try again.
+    }
+  });
+}
+
+function openCloudModal() {
+  renderCloudModalBody();
+  document.getElementById('cloud-modal').hidden = false;
+}
+
+document.getElementById('cloud-settings-button').addEventListener('click', openCloudModal);
+document.getElementById('cloud-modal').addEventListener('click', (event) => {
+  if (event.target.id === 'cloud-modal') closeCloudModal();
+});
+
+auth.onAuthStateChanged(async (user) => {
+  currentUser = user;
+  updateCloudButton();
+
+  if (unsubscribeCloud) {
+    unsubscribeCloud();
+    unsubscribeCloud = null;
+  }
+  if (!user) return;
+
+  try {
+    const existing = await cloudDocRef().get();
+    if (!existing.exists) await pushToCloud();
+  } catch {
+    // No connection yet — the snapshot listener below will still sync once it returns.
+  }
+
+  unsubscribeCloud = cloudDocRef().onSnapshot((snapshot) => {
+    if (!snapshot.exists) return;
+    const data = snapshot.data() || {};
+    suppressCloudWrite = true;
+    counts = sanitiseCounts(data.counts);
+    transactions = sanitiseTransactions(data.transactions);
+    goal = sanitiseGoal(data.goal);
+    save();
+    draw();
+    suppressCloudWrite = false;
+  });
+});

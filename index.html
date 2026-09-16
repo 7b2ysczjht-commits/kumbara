@@ -12,8 +12,11 @@
 <body>
   <main class="app">
     <header>
-      <button class="pin-toggle" id="pin-settings-button" type="button" aria-label="Kilit ayarları">🔓</button>
-      <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Temayı değiştir">🌙</button>
+      <div class="header-actions">
+        <button class="header-button" id="cloud-settings-button" type="button" aria-label="Bulut senkronizasyonu">☁️</button>
+        <button class="header-button" id="pin-settings-button" type="button" aria-label="Kilit ayarları">🔓</button>
+        <button class="header-button" id="theme-toggle" type="button" aria-label="Temayı değiştir">🌙</button>
+      </div>
       <h1>🐷 Mobil Kumbara</h1>
       <p class="sub">Tek tek veya toplu ekle</p>
     </header>
@@ -103,6 +106,13 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="cloud-modal" hidden>
+    <div class="modal">
+      <h3>☁️ Bulut Senkronizasyonu</h3>
+      <div id="cloud-modal-body"></div>
+    </div>
+  </div>
+
   <div class="modal-overlay" id="pin-modal" hidden>
     <div class="modal">
       <h3>🔒 PIN Kilidi</h3>
@@ -122,6 +132,9 @@
     </div>
   </div>
 
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
