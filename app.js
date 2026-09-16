@@ -13,6 +13,7 @@ const DENOMINATIONS = [
 const STORAGE = {
   counts: 'kumbara.v2.counts',
   transactions: 'kumbara.v2.transactions',
+  goal: 'kumbara.v2.goal',
   legacyCounts: 'kumbaraC',
   legacyHistory: 'kumbaraH',
 };
@@ -23,6 +24,7 @@ const denominationById = new Map(DENOMINATIONS.map((item) => [item.id, item]));
 
 let counts = loadCounts();
 let transactions = loadTransactions();
+let goal = loadGoal();
 
 function money(value) {
   return `₺${value.toLocaleString('tr-TR', {
@@ -91,10 +93,16 @@ function loadTransactions() {
   return saved.map(normaliseTransaction).filter(Boolean).slice(0, MAX_TRANSACTIONS);
 }
 
+function loadGoal() {
+  const value = Number(parseStoredValue(STORAGE.goal, null));
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
 function save() {
   try {
     localStorage.setItem(STORAGE.counts, JSON.stringify(counts));
     localStorage.setItem(STORAGE.transactions, JSON.stringify(transactions));
+    localStorage.setItem(STORAGE.goal, JSON.stringify(goal));
   } catch {
     // The current session continues even when browser storage is unavailable.
   }
@@ -170,6 +178,19 @@ function clearAll() {
   } catch {
     // Saving the empty v2 state below is sufficient when removal is blocked.
   }
+  save();
+  draw();
+}
+
+function setGoal() {
+  const input = window.prompt('Hedef tutarını girin (₺):', goal ?? '');
+  if (input === null) return;
+
+  const normalised = input.trim().replace(/\./g, '').replace(',', '.');
+  const value = Number(normalised);
+  if (!Number.isFinite(value) || value <= 0) return;
+
+  goal = value;
   save();
   draw();
 }
@@ -300,17 +321,40 @@ function drawWeeklyChart() {
   }).join('');
 }
 
-function drawTotal() {
-  const total = DENOMINATIONS.reduce(
+function getTotal() {
+  return DENOMINATIONS.reduce(
     (sum, denomination) => sum + (counts[denomination.id] ?? 0) * denomination.value,
     0,
   );
-  document.getElementById('total').textContent = money(total);
+}
+
+function drawTotal() {
+  document.getElementById('total').textContent = money(getTotal());
+}
+
+function drawGoal() {
+  const body = document.getElementById('goal-body');
+  if (!goal) {
+    body.innerHTML = '<p class="empty">Henüz hedef belirlenmedi.</p>';
+    return;
+  }
+
+  const total = getTotal();
+  const percent = Math.min(100, Math.round((total / goal) * 1000) / 10);
+  body.innerHTML = `
+    <div class="goal-amounts">
+      <span>${money(total)} / ${money(goal)}</span>
+      <strong>%${percent.toLocaleString('tr-TR')}</strong>
+    </div>
+    <div class="progress">
+      <div class="progress-bar" style="width: ${percent}%"></div>
+    </div>`;
 }
 
 function draw() {
   drawDenominations();
   drawTotal();
+  drawGoal();
   drawStatistics();
   drawHistory();
   document.getElementById('undo-button').disabled = transactions.length === 0;
@@ -320,6 +364,10 @@ document.addEventListener('click', (event) => {
   const button = event.target.closest('button[data-action]');
   if (!button) return;
   const { action, id } = button.dataset;
+  if (action === 'set-goal') {
+    setGoal();
+    return;
+  }
   if (!denominationById.has(id)) return;
 
   if (action === 'add') change(id, 1);
