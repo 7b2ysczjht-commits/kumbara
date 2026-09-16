@@ -127,6 +127,69 @@ h2 { margin-top: 28px; }
 
 .empty { color: #999; }
 
+.stats {
+  padding: 15px;
+  background: white;
+  border-radius: 17px;
+}
+
+.stats h2 { margin: 0 0 12px; font-size: 1em; }
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  text-align: center;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 4px;
+  background: #f6f0ea;
+  border-radius: 12px;
+}
+
+.stat-label { font-size: 11px; color: #888; }
+
+.stat strong { font-size: 15px; }
+
+.chart {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 6px;
+  height: 100px;
+  margin-top: 16px;
+}
+
+.chart-column {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.chart-bar-area {
+  display: flex;
+  align-items: flex-end;
+  height: 72px;
+}
+
+.chart-bar {
+  width: 14px;
+  min-height: 3px;
+  background: #241f1b;
+  border-radius: 4px 4px 0 0;
+}
+
+.chart-bar.negative { background: #a22020; }
+
+.chart-label { font-size: 10px; color: #888; }
+
 @media (max-width: 360px) {
   .grid { grid-template-columns: 1fr; }
+  .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
