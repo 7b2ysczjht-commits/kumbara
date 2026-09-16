@@ -121,6 +121,21 @@ h2 { margin-top: 28px; }
 
 .row:last-child { border-bottom: 0; }
 
+.row-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.row-undo {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  background: #eee;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
 .added { color: #176b3a; }
 
 .removed { color: #a22020; }

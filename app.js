@@ -150,18 +150,26 @@ function bulkAdd(denominationId) {
   input.value = '1';
 }
 
+function reverseTransaction(index) {
+  const transaction = transactions[index];
+  if (!transaction) return false;
+
+  const delta = transaction.type === 'add' ? -transaction.quantity : transaction.quantity;
+  if (!updateCount(transaction.denominationId, delta)) return false;
+
+  transactions.splice(index, 1);
+  return true;
+}
+
 function undo() {
-  const lastTransaction = transactions.shift();
-  if (!lastTransaction) return;
+  if (!reverseTransaction(0)) return;
+  save();
+  draw();
+}
 
-  const change = lastTransaction.type === 'add'
-    ? -lastTransaction.quantity
-    : lastTransaction.quantity;
-  if (!updateCount(lastTransaction.denominationId, change)) {
-    transactions.unshift(lastTransaction);
-    return;
-  }
-
+function undoTransaction(id) {
+  const index = transactions.findIndex((transaction) => transaction.id === id);
+  if (index === -1 || !reverseTransaction(index)) return;
   save();
   draw();
 }
@@ -240,7 +248,10 @@ function drawHistory() {
     return `
       <div class="row">
         <span>${action}: ${transaction.quantity} × ${denomination.label}<br><small>${formatTime(transaction.createdAt)}</small></span>
-        <strong class="${className}">${sign}${money(total)}</strong>
+        <div class="row-right">
+          <strong class="${className}">${sign}${money(total)}</strong>
+          <button class="row-undo" type="button" data-action="undo-one" data-tx="${transaction.id}" aria-label="Bu işlemi geri al">↩️</button>
+        </div>
       </div>`;
   }).join('');
 }
@@ -366,6 +377,10 @@ document.addEventListener('click', (event) => {
   const { action, id } = button.dataset;
   if (action === 'set-goal') {
     setGoal();
+    return;
+  }
+  if (action === 'undo-one') {
+    undoTransaction(button.dataset.tx);
     return;
   }
   if (!denominationById.has(id)) return;
