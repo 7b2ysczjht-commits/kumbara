@@ -17,7 +17,8 @@ const STORAGE = {
   legacyHistory: 'kumbaraH',
 };
 
-const MAX_HISTORY = 30;
+const MAX_TRANSACTIONS = 500;
+const RECENT_HISTORY_COUNT = 10;
 const denominationById = new Map(DENOMINATIONS.map((item) => [item.id, item]));
 
 let counts = loadCounts();
@@ -28,6 +29,10 @@ function money(value) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
+}
+
+function signedMoney(value) {
+  return `${value < 0 ? '−' : ''}${money(Math.abs(value))}`;
 }
 
 function parseStoredValue(key, fallback) {
@@ -83,7 +88,7 @@ function loadTransactions() {
   const saved = parseStoredValue(STORAGE.transactions, null)
     ?? parseStoredValue(STORAGE.legacyHistory, []);
   if (!Array.isArray(saved)) return [];
-  return saved.map(normaliseTransaction).filter(Boolean).slice(0, MAX_HISTORY);
+  return saved.map(normaliseTransaction).filter(Boolean).slice(0, MAX_TRANSACTIONS);
 }
 
 function save() {
@@ -113,7 +118,7 @@ function addTransaction(denominationId, quantity, type) {
     type,
     createdAt: new Date().toISOString(),
   });
-  transactions = transactions.slice(0, MAX_HISTORY);
+  transactions = transactions.slice(0, MAX_TRANSACTIONS);
 }
 
 function change(denominationId, quantity) {
@@ -204,7 +209,7 @@ function drawHistory() {
     return;
   }
 
-  history.innerHTML = transactions.map((transaction) => {
+  history.innerHTML = transactions.slice(0, RECENT_HISTORY_COUNT).map((transaction) => {
     const denomination = denominationById.get(transaction.denominationId);
     const isAddition = transaction.type === 'add';
     const total = transaction.quantity * denomination.value;
@@ -215,6 +220,82 @@ function drawHistory() {
       <div class="row">
         <span>${action}: ${transaction.quantity} × ${denomination.label}<br><small>${formatTime(transaction.createdAt)}</small></span>
         <strong class="${className}">${sign}${money(total)}</strong>
+      </div>`;
+  }).join('');
+}
+
+function getTransactionDate(transaction) {
+  if (!transaction.createdAt) return null;
+  const date = new Date(transaction.createdAt);
+  return Number.isNaN(date.valueOf()) ? null : date;
+}
+
+function transactionValue(transaction) {
+  const denomination = denominationById.get(transaction.denominationId);
+  const value = denomination.value * transaction.quantity;
+  return transaction.type === 'add' ? value : -value;
+}
+
+function startOfDay(date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function sumTransactionsSince(start) {
+  return transactions.reduce((sum, transaction) => {
+    const date = getTransactionDate(transaction);
+    return date && date >= start ? sum + transactionValue(transaction) : sum;
+  }, 0);
+}
+
+function getStatistics(now = new Date()) {
+  const today = startOfDay(now);
+  const week = new Date(today);
+  const daysSinceMonday = (today.getDay() + 6) % 7;
+  week.setDate(week.getDate() - daysSinceMonday);
+  const month = new Date(today.getFullYear(), today.getMonth(), 1);
+
+  return {
+    today: sumTransactionsSince(today),
+    week: sumTransactionsSince(week),
+    month: sumTransactionsSince(month),
+    count: transactions.length,
+  };
+}
+
+function drawStatistics() {
+  const statistics = getStatistics();
+  document.getElementById('stat-today').textContent = signedMoney(statistics.today);
+  document.getElemById('stat-week').textCtntent = signedMoney(statistics.week);
+  document.getElementById('stat-month').textContent = signedMoney(statistics.month);
+  document.getElemById('stat-count').textContent = String(statistics.count);
+  drawWeeklyChart();
+}
+
+function drawWeeklyChart() {
+  const chart = document.getElemById('weekly-chart');
+  const today = startOfDay(new Date());
+  const days = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(today);
+    date.setDate(today.getDate() - (6 - index));
+    return { date, value: 0 };
+  });
+
+  for (const transaction of transactions) {
+    const date = getTransactionDate(transaction);
+    if (!date) continue;
+    const dayIndex = days.findIndex((day) => startOfDay(date).valueOf() === day.date.valueOf());
+    if (dayIndex !== -1) days[dayIndex].value += transactionValue(transaction);
+  }
+
+  const maximum = Math.max(1, ...days.map((day) => Math.abs(day.value)));
+  chart.innerHTML = days.map((day) => {
+    const height = Math.max(3, Math.round((Math.abs(day.value) / maximum) * 72));
+    const negative = day.value < 0 ? ' negative' : '';
+    const label = day.date.toLocaleDateString('tr-TR', { weekday: 'short' });
+    return `
+      <div class="chart-column" title="${label}: ${signedMoney(day.value)}">
+        <div class="chart-bar-area"><div class="chart-bar${negative}" style="height: ${height}px"></div></div>
+        <span class="chart-label">${label}</span>
       </div>`;
   }).join('');
 }
@@ -230,6 +311,7 @@ function drawTotal() {
 function draw() {
   drawDenominations();
   drawTotal();
+  drawStatistics();
   drawHistory();
   document.getElementById('undo-button').disabled = transactions.length === 0;
 }
@@ -246,6 +328,6 @@ document.addEventListener('click', (event) => {
 });
 
 document.getElementById('undo-button').addEventListener('click', undo);
-document.getElementById('clear-button').addEventListener('click', clearAll);
+document.getElemById('clear-button').addEventListener('click', clearAll);
 
 draw();
