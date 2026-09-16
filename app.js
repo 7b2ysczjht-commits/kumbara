@@ -129,6 +129,13 @@ function addTransaction(denominationId, quantity, type) {
   transactions = transactions.slice(0, MAX_TRANSACTIONS);
 }
 
+function bumpTotal() {
+  const el = document.querySelector('.total');
+  el.classList.remove('bump');
+  void el.offsetWidth;
+  el.classList.add('bump');
+}
+
 function change(denominationId, quantity) {
   const type = quantity > 0 ? 'add' : 'remove';
   if (!updateCount(denominationId, quantity)) return;
@@ -136,6 +143,7 @@ function change(denominationId, quantity) {
   addTransaction(denominationId, Math.abs(quantity), type);
   save();
   draw();
+  bumpTotal();
 }
 
 function bulkAdd(denominationId) {
@@ -165,6 +173,7 @@ function undo() {
   if (!reverseTransaction(0)) return;
   save();
   draw();
+  bumpTotal();
 }
 
 function undoTransaction(id) {
@@ -172,6 +181,7 @@ function undoTransaction(id) {
   if (index === -1 || !reverseTransaction(index)) return;
   save();
   draw();
+  bumpTotal();
 }
 
 function clearAll() {
@@ -190,17 +200,27 @@ function clearAll() {
   draw();
 }
 
-function setGoal() {
-  const input = window.prompt('Hedef tutarını girin (₺):', goal ?? '');
-  if (input === null) return;
+function openGoalModal() {
+  const modal = document.getElementById('goal-modal');
+  const input = document.getElementById('goal-input');
+  input.value = goal ?? '';
+  modal.hidden = false;
+  input.focus();
+}
 
-  const normalised = input.trim().replace(/\./g, '').replace(',', '.');
-  const value = Number(normalised);
-  if (!Number.isFinite(value) || value <= 0) return;
+function closeGoalModal() {
+  document.getElementById('goal-modal').hidden = true;
+}
 
-  goal = value;
-  save();
-  draw();
+function saveGoalFromModal() {
+  const input = document.getElementById('goal-input');
+  const value = Number(input.value);
+  if (Number.isFinite(value) && value > 0) {
+    goal = value;
+    save();
+    draw();
+  }
+  closeGoalModal();
 }
 
 function createCard(denomination) {
@@ -376,7 +396,7 @@ document.addEventListener('click', (event) => {
   if (!button) return;
   const { action, id } = button.dataset;
   if (action === 'set-goal') {
-    setGoal();
+    openGoalModal();
     return;
   }
   if (action === 'undo-one') {
@@ -393,4 +413,43 @@ document.addEventListener('click', (event) => {
 document.getElementById('undo-button').addEventListener('click', undo);
 document.getElementById('clear-button').addEventListener('click', clearAll);
 
+document.getElementById('goal-save').addEventListener('click', saveGoalFromModal);
+document.getElementById('goal-cancel').addEventListener('click', closeGoalModal);
+document.getElementById('goal-modal').addEventListener('click', (event) => {
+  if (event.target.id === 'goal-modal') closeGoalModal();
+});
+document.getElementById('goal-input').addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') saveGoalFromModal();
+  if (event.key === 'Escape') closeGoalModal();
+});
+
+const THEME_KEY = 'kumbara.v2.theme';
+let theme = parseStoredValue(THEME_KEY, null);
+
+function systemPrefersDark() {
+  return window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+
+function applyTheme() {
+  const isDark = theme ? theme === 'dark' : systemPrefersDark();
+  if (theme) document.documentElement.dataset.theme = theme;
+  else delete document.documentElement.dataset.theme;
+
+  document.getElementById('theme-toggle').textContent = isDark ? '☀️' : '🌙';
+  const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+  if (metaThemeColor) metaThemeColor.content = isDark ? '#15130f' : '#f6f0ea';
+}
+
+document.getElementById('theme-toggle').addEventListener('click', () => {
+  const isDark = theme ? theme === 'dark' : systemPrefersDark();
+  theme = isDark ? 'light' : 'dark';
+  try {
+    localStorage.setItem(THEME_KEY, JSON.stringify(theme));
+  } catch {
+    // Theme just won't persist across reloads when storage is unavailable.
+  }
+  applyTheme();
+});
+
+applyTheme();
 draw();

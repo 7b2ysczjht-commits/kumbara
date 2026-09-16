@@ -12,6 +12,7 @@
 <body>
   <main class="app">
     <header>
+      <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Temayı değiştir">🌙</button>
       <h1>🐷 Mobil Kumbara</h1>
       <p class="sub">Tek tek veya toplu ekle</p>
     </header>
@@ -72,6 +73,18 @@
       <div id="history"></div>
     </section>
   </main>
+
+  <div class="modal-overlay" id="goal-modal" hidden>
+    <div class="modal">
+      <h3>🎯 Hedef Belirle</h3>
+      <label for="goal-input">Hedef tutarı (₺)</label>
+      <input type="number" id="goal-input" min="1" step="1" inputmode="numeric" placeholder="20000">
+      <div class="modal-actions">
+        <button class="modal-cancel" id="goal-cancel" type="button">Vazgeç</button>
+        <button class="modal-save" id="goal-save" type="button">Kaydet</button>
+      </div>
+    </div>
+  </div>
 
   <script src="app.js"></script>
 </body>
