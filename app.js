@@ -448,12 +448,11 @@ function applyTheme() {
   if (theme) document.documentElement.dataset.theme = theme;
   else delete document.documentElement.dataset.theme;
 
-  document.getElementById('theme-toggle').textContent = isDark ? '☀️' : '🌙';
   const metaThemeColor = document.querySelector('meta[name="theme-color"]');
   if (metaThemeColor) metaThemeColor.content = isDark ? '#15130f' : '#f6f0ea';
 }
 
-document.getElementById('theme-toggle').addEventListener('click', () => {
+function toggleTheme() {
   const isDark = theme ? theme === 'dark' : systemPrefersDark();
   theme = isDark ? 'light' : 'dark';
   try {
@@ -462,7 +461,7 @@ document.getElementById('theme-toggle').addEventListener('click', () => {
     // Theme just won't persist across reloads when storage is unavailable.
   }
   applyTheme();
-});
+}
 
 applyTheme();
 draw();
@@ -507,10 +506,6 @@ async function verifyPin(pin) {
   } catch {
     return false;
   }
-}
-
-function updatePinButton() {
-  document.getElementById('pin-settings-button').textContent = hasPin() ? '🔒' : '🔓';
 }
 
 let pinBuffer = '';
@@ -585,7 +580,6 @@ function renderPinModalBody() {
     document.getElementById('pin-modal-close').addEventListener('click', closePinModal);
     document.getElementById('pin-modal-remove').addEventListener('click', () => {
       removePin();
-      updatePinButton();
       closePinModal();
     });
     return;
@@ -610,7 +604,6 @@ function renderPinModalBody() {
       return;
     }
     await setPin(a);
-    updatePinButton();
     closePinModal();
   });
 }
@@ -620,12 +613,10 @@ function openPinModal() {
   document.getElementById('pin-modal').hidden = false;
 }
 
-document.getElementById('pin-settings-button').addEventListener('click', openPinModal);
 document.getElementById('pin-modal').addEventListener('click', (event) => {
   if (event.target.id === 'pin-modal') closePinModal();
 });
 
-updatePinButton();
 if (hasPin()) showLockScreen();
 
 const firebaseConfig = {
@@ -661,12 +652,6 @@ async function pushToCloud() {
   } catch {
     // Offline or blocked — the local copy stays authoritative until the next successful sync.
   }
-}
-
-function updateCloudButton() {
-  const button = document.getElementById('cloud-settings-button');
-  button.classList.toggle('synced', Boolean(currentUser));
-  button.textContent = currentUser ? '🔄' : '☁️';
 }
 
 function closeCloudModal() {
@@ -714,14 +699,12 @@ function openCloudModal() {
   document.getElementById('cloud-modal').hidden = false;
 }
 
-document.getElementById('cloud-settings-button').addEventListener('click', openCloudModal);
 document.getElementById('cloud-modal').addEventListener('click', (event) => {
   if (event.target.id === 'cloud-modal') closeCloudModal();
 });
 
 auth.onAuthStateChanged(async (user) => {
   currentUser = user;
-  updateCloudButton();
 
   if (unsubscribeCloud) {
     unsubscribeCloud();
@@ -747,4 +730,56 @@ auth.onAuthStateChanged(async (user) => {
     draw();
     suppressCloudWrite = false;
   });
+});
+
+function closeSettingsModal() {
+  document.getElementById('settings-modal').hidden = true;
+}
+
+function renderSettingsModalBody() {
+  const body = document.getElementById('settings-modal-body');
+  const isDark = theme ? theme === 'dark' : systemPrefersDark();
+  const pinStatus = hasPin() ? 'Açık' : 'Kapalı';
+  const cloudStatus = currentUser ? (currentUser.email || currentUser.displayName || 'Bağlı') : 'Bağlı değil';
+
+  body.innerHTML = `
+    <div class="settings-row clickable" id="settings-theme-row">
+      <span class="settings-row-label">🌙 Tema</span>
+      <span class="settings-row-value">${isDark ? 'Koyu' : 'Açık'}</span>
+    </div>
+    <div class="settings-row clickable" id="settings-pin-row">
+      <span class="settings-row-label">🔒 PIN Kilidi</span>
+      <span class="settings-row-value">${pinStatus}</span>
+    </div>
+    <div class="settings-row clickable" id="settings-cloud-row">
+      <span class="settings-row-label">☁️ Bulut Senkronizasyonu</span>
+      <span class="settings-row-value">${cloudStatus}</span>
+    </div>
+    <div class="modal-actions">
+      <button class="modal-cancel" type="button" id="settings-modal-close">Kapat</button>
+    </div>`;
+
+  document.getElementById('settings-modal-close').addEventListener('click', closeSettingsModal);
+  document.getElementById('settings-theme-row').addEventListener('click', () => {
+    toggleTheme();
+    renderSettingsModalBody();
+  });
+  document.getElementById('settings-pin-row').addEventListener('click', () => {
+    closeSettingsModal();
+    openPinModal();
+  });
+  document.getElementById('settings-cloud-row').addEventListener('click', () => {
+    closeSettingsModal();
+    openCloudModal();
+  });
+}
+
+function openSettingsModal() {
+  renderSettingsModalBody();
+  document.getElementById('settings-modal').hidden = false;
+}
+
+document.getElementById('settings-button').addEventListener('click', openSettingsModal);
+document.getElementById('settings-modal').addEventListener('click', (event) => {
+  if (event.target.id === 'settings-modal') closeSettingsModal();
 });

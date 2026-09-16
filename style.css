@@ -434,6 +434,22 @@ h2 { margin-top: 28px; }
 
 .modal-danger { color: #ffffff; background: var(--danger); }
 
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-row:last-of-type { border-bottom: 0; }
+
+.settings-row.clickable { cursor: pointer; }
+
+.settings-row-label { font-weight: 600; }
+
+.settings-row-value { color: var(--text-muted); font-size: 13px; }
+
 .lock-screen {
   position: fixed;
   inset: 0;
