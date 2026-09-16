@@ -109,6 +109,18 @@ function sanitiseBank(saved) {
     counts: sanitiseCounts(saved?.counts),
     transactions: sanitiseTransactions(saved?.transactions),
     goal: sanitiseGoal(saved?.goal),
+    shared: saved?.shared === true,
+  };
+}
+
+function makeSharedBank(name) {
+  return {
+    id: crypto.randomUUID(),
+    name: (name && name.trim()) || 'Aile Kumbarası',
+    counts: {},
+    transactions: [],
+    goal: null,
+    shared: true,
   };
 }
 
@@ -151,14 +163,18 @@ let counts = getActiveBank().counts;
 let transactions = getActiveBank().transactions;
 let goal = getActiveBank().goal;
 
-function save() {
-  syncActiveBankState();
+function persistLocalBanksOnly() {
   try {
     localStorage.setItem(STORAGE.banks, JSON.stringify(banks));
     localStorage.setItem(STORAGE.activeBankId, JSON.stringify(activeBankId));
   } catch {
     // The current session continues even when browser storage is unavailable.
   }
+}
+
+function save() {
+  syncActiveBankState();
+  persistLocalBanksOnly();
   pushToCloud();
 }
 
@@ -171,7 +187,8 @@ function loadActiveBankState() {
 
 function updateActiveBankLabel() {
   const label = document.getElementById('active-bank-name');
-  if (label) label.textContent = getActiveBank().name;
+  const bank = getActiveBank();
+  if (label) label.textContent = (bank.shared ? '👨‍👩‍👧 ' : '') + bank.name;
 }
 
 function switchBank(id) {
@@ -192,6 +209,10 @@ function createBank(name) {
 
 function deleteBank(id) {
   if (banks.length <= 1) return;
+  if (sharedBankUnsubscribers.has(id)) {
+    sharedBankUnsubscribers.get(id)();
+    sharedBankUnsubscribers.delete(id);
+  }
   const wasActive = id === activeBankId;
   banks = banks.filter((bank) => bank.id !== id);
   if (wasActive) {
@@ -939,21 +960,108 @@ const firestore = firebase.firestore();
 let currentUser = null;
 let suppressCloudWrite = false;
 let unsubscribeCloud = null;
+const sharedBankUnsubscribers = new Map();
 
 function cloudDocRef() {
   return firestore.collection('users').doc(currentUser.uid);
 }
 
+function sharedBankDocRef(shareId) {
+  return firestore.collection('sharedBanks').doc(shareId);
+}
+
 async function pushToCloud() {
   if (!currentUser || suppressCloudWrite) return;
   try {
+    const sharedBanks = banks.filter((bank) => bank.shared);
+    await Promise.all(sharedBanks.map((bank) => sharedBankDocRef(bank.id).set({
+      name: bank.name,
+      counts: bank.counts,
+      transactions: bank.transactions,
+      goal: bank.goal,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    })));
+
+    const personalBanks = banks.filter((bank) => !bank.shared);
     await cloudDocRef().set({
-      banks,
+      banks: personalBanks,
+      sharedBankIds: sharedBanks.map((bank) => bank.id),
       activeBankId,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
   } catch {
     // Offline or blocked — the local copy stays authoritative until the next successful sync.
+  }
+}
+
+function subscribeSharedBank(shareId) {
+  if (sharedBankUnsubscribers.has(shareId)) return;
+  const unsubscribe = sharedBankDocRef(shareId).onSnapshot((snapshot) => {
+    if (!snapshot.exists) return;
+    const data = snapshot.data() || {};
+    const bank = banks.find((item) => item.id === shareId);
+    if (!bank) return;
+
+    suppressCloudWrite = true;
+    bank.name = (typeof data.name === 'string' && data.name.trim()) || bank.name;
+    bank.counts = sanitiseCounts(data.counts);
+    bank.transactions = sanitiseTransactions(data.transactions);
+    bank.goal = sanitiseGoal(data.goal);
+    if (shareId === activeBankId) loadActiveBankState();
+    persistLocalBanksOnly();
+    if (shareId === activeBankId) draw();
+    updateActiveBankLabel();
+    suppressCloudWrite = false;
+  });
+  sharedBankUnsubscribers.set(shareId, unsubscribe);
+}
+
+async function createSharedBank(name) {
+  if (!currentUser) {
+    openCloudModal();
+    return;
+  }
+  syncActiveBankState();
+  const bank = makeSharedBank(name);
+  banks.push(bank);
+  subscribeSharedBank(bank.id);
+  switchBank(bank.id);
+}
+
+async function joinSharedBank(code) {
+  if (!currentUser) {
+    openCloudModal();
+    return;
+  }
+  const shareId = code.trim();
+  if (!shareId) return;
+
+  if (banks.some((bank) => bank.id === shareId)) {
+    switchBank(shareId);
+    return;
+  }
+
+  try {
+    const doc = await sharedBankDocRef(shareId).get();
+    if (!doc.exists) {
+      window.alert('Bu kodla bir paylaşımlı kumbara bulunamadı.');
+      return;
+    }
+    const data = doc.data() || {};
+    const bank = {
+      id: shareId,
+      name: (typeof data.name === 'string' && data.name.trim()) || 'Paylaşımlı Kumbara',
+      counts: sanitiseCounts(data.counts),
+      transactions: sanitiseTransactions(data.transactions),
+      goal: sanitiseGoal(data.goal),
+      shared: true,
+    };
+    syncActiveBankState();
+    banks.push(bank);
+    subscribeSharedBank(shareId);
+    switchBank(shareId);
+  } catch {
+    window.alert('Katılırken bir hata oluştu, tekrar deneyin.');
   }
 }
 
@@ -1013,7 +1121,21 @@ auth.onAuthStateChanged(async (user) => {
     unsubscribeCloud();
     unsubscribeCloud = null;
   }
-  if (!user) return;
+  for (const unsubscribe of sharedBankUnsubscribers.values()) unsubscribe();
+  sharedBankUnsubscribers.clear();
+
+  if (!user) {
+    if (banks.some((bank) => bank.shared)) {
+      banks = banks.filter((bank) => !bank.shared);
+      if (!banks.length) banks = [makeBank('Kumbaram')];
+      if (!banks.some((bank) => bank.id === activeBankId)) activeBankId = banks[0].id;
+      loadActiveBankState();
+      persistLocalBanksOnly();
+      draw();
+      updateActiveBankLabel();
+    }
+    return;
+  }
 
   try {
     const existing = await cloudDocRef().get();
@@ -1027,11 +1149,30 @@ auth.onAuthStateChanged(async (user) => {
     const data = snapshot.data() || {};
     suppressCloudWrite = true;
 
-    banks = Array.isArray(data.banks) && data.banks.length
+    const personalBanks = Array.isArray(data.banks) && data.banks.length
       ? data.banks.map(sanitiseBank)
       : [makeBank('Kumbaram', sanitiseCounts(data.counts), sanitiseTransactions(data.transactions), sanitiseGoal(data.goal))];
+
+    const sharedBankIds = Array.isArray(data.sharedBankIds)
+      ? data.sharedBankIds.filter((id) => typeof id === 'string')
+      : [];
+    const existingSharedBanks = banks.filter((bank) => bank.shared && sharedBankIds.includes(bank.id));
+    const newSharedIds = sharedBankIds.filter((id) => !existingSharedBanks.some((bank) => bank.id === id));
+    const placeholderSharedBanks = newSharedIds.map((id) => ({
+      id, name: 'Paylaşımlı Kumbara', counts: {}, transactions: [], goal: null, shared: true,
+    }));
+
+    banks = [...personalBanks, ...existingSharedBanks, ...placeholderSharedBanks];
     activeBankId = banks.some((bank) => bank.id === data.activeBankId) ? data.activeBankId : banks[0].id;
     loadActiveBankState();
+
+    newSharedIds.forEach(subscribeSharedBank);
+    for (const [id, unsubscribe] of sharedBankUnsubscribers) {
+      if (!sharedBankIds.includes(id)) {
+        unsubscribe();
+        sharedBankUnsubscribers.delete(id);
+      }
+    }
 
     save();
     draw();
@@ -1145,12 +1286,13 @@ function renderBanksModalBody() {
   const rows = banks.map((bank) => `
     <div class="bank-row" data-bank-id="${bank.id}">
       <div class="bank-row-main" data-action="switch">
-        <span class="bank-row-name">${bank.id === activeBankId ? '✓ ' : ''}${bank.name}</span>
+        <span class="bank-row-name">${bank.id === activeBankId ? '✓ ' : ''}${bank.shared ? '👨‍👩‍👧 ' : ''}${bank.name}</span>
         <span class="bank-row-total">${money(bankTotal(bank))}</span>
       </div>
       <div class="bank-row-actions">
         <button type="button" class="bank-row-btn" data-action="rename" aria-label="Adını değiştir">✏️</button>
-        ${banks.length > 1 ? '<button type="button" class="bank-row-btn" data-action="delete" aria-label="Sil">🗑️</button>' : ''}
+        ${bank.shared ? '<button type="button" class="bank-row-btn" data-action="share" aria-label="Paylaşım kodu">🔗</button>' : ''}
+        ${banks.length > 1 ? `<button type="button" class="bank-row-btn" data-action="delete" aria-label="${bank.shared ? 'Ayrıl' : 'Sil'}">${bank.shared ? '🚪' : '🗑️'}</button>` : ''}
       </div>
     </div>`).join('');
 
@@ -1160,7 +1302,15 @@ function renderBanksModalBody() {
     <input type="text" id="new-bank-input" maxlength="30" placeholder="Örn. Tatil">
     <div class="modal-actions">
       <button class="modal-cancel" type="button" id="banks-modal-close">Kapat</button>
-      <button class="modal-save" type="button" id="banks-modal-add">Ekle</button>
+      <button class="modal-save" type="button" id="banks-modal-add">Kişisel Ekle</button>
+    </div>
+    <div class="modal-actions">
+      <button class="modal-save" type="button" id="banks-modal-add-shared">👨‍👩‍👧 Paylaşımlı Oluştur</button>
+    </div>
+    <label for="join-code-input">Paylaşım kodu ile katıl</label>
+    <input type="text" id="join-code-input" placeholder="Kod yapıştır">
+    <div class="modal-actions">
+      <button class="modal-save" type="button" id="banks-modal-join">🔗 Katıl</button>
     </div>`;
 
   document.getElementById('banks-modal-close').addEventListener('click', closeBanksModal);
@@ -1172,6 +1322,25 @@ function renderBanksModalBody() {
       return;
     }
     createBank(name);
+    closeBanksModal();
+  });
+  document.getElementById('banks-modal-add-shared').addEventListener('click', () => {
+    const input = document.getElementById('new-bank-input');
+    const name = input.value.trim();
+    if (!name) {
+      input.focus();
+      return;
+    }
+    createSharedBank(name);
+    closeBanksModal();
+  });
+  document.getElementById('banks-modal-join').addEventListener('click', () => {
+    const input = document.getElementById('join-code-input');
+    if (!input.value.trim()) {
+      input.focus();
+      return;
+    }
+    joinSharedBank(input.value);
     closeBanksModal();
   });
 
@@ -1189,12 +1358,29 @@ function renderBanksModalBody() {
         renderBanksModalBody();
       }
     });
+    const shareButton = row.querySelector('[data-action="share"]');
+    if (shareButton) {
+      shareButton.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(id);
+          window.alert(`Paylaşım kodu kopyalandı:\n\n${id}\n\nBu kodu aile üyenle paylaş, "Kod ile Katıl" ile eklesin.`);
+        } catch {
+          try {
+            window.prompt('Bu kodu kopyala ve aile üyenle paylaş:', id);
+          } catch {
+            // No clipboard or prompt available — the code is still visible in the bank list if needed.
+          }
+        }
+      });
+    }
     const deleteButton = row.querySelector('[data-action="delete"]');
     if (deleteButton) {
       deleteButton.addEventListener('click', () => {
         const bank = banks.find((item) => item.id === id);
-        const confirmed = window.confirm(`"${bank.name}" kumbarasını silmek istediğine emin misin? Bu işlem geri alınamaz.`);
-        if (!confirmed) return;
+        const message = bank.shared
+          ? `"${bank.name}" paylaşımlı kumbarasından ayrılmak istediğine emin misin?`
+          : `"${bank.name}" kumbarasını silmek istediğine emin misin? Bu işlem geri alınamaz.`;
+        if (!window.confirm(message)) return;
         deleteBank(id);
         renderBanksModalBody();
       });
