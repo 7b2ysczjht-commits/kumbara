@@ -402,6 +402,13 @@ function sumTransactionsSince(start) {
   }, 0);
 }
 
+function sumTransactionsBetween(start, end) {
+  return transactions.reduce((sum, transaction) => {
+    const date = getTransactionDate(transaction);
+    return date && date >= start && date < end ? sum + transactionValue(transaction) : sum;
+  }, 0);
+}
+
 function getStatistics(now = new Date()) {
   const today = startOfDay(now);
   const week = new Date(today);
@@ -417,6 +424,65 @@ function getStatistics(now = new Date()) {
   };
 }
 
+function getMonthComparison(now = new Date()) {
+  const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  return {
+    thisMonth: sumTransactionsBetween(thisMonthStart, new Date(now.getFullYear(), now.getMonth() + 1, 1)),
+    lastMonth: sumTransactionsBetween(lastMonthStart, thisMonthStart),
+  };
+}
+
+function hasAddOnDay(day) {
+  return transactions.some((transaction) => {
+    if (transaction.type !== 'add') return false;
+    const date = getTransactionDate(transaction);
+    return date && startOfDay(date).valueOf() === day.valueOf();
+  });
+}
+
+function getStreak(now = new Date()) {
+  const today = startOfDay(now);
+  let cursor = today;
+  if (!hasAddOnDay(today)) {
+    cursor = new Date(today);
+    cursor.setDate(cursor.getDate() - 1);
+  }
+
+  let streak = 0;
+  while (hasAddOnDay(cursor)) {
+    streak += 1;
+    cursor = new Date(cursor);
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  return streak;
+}
+
+function drawStreakAndComparison() {
+  const streak = getStreak();
+  const streakEl = document.getElementById('streak-line');
+  streakEl.textContent = streak > 0
+    ? `🔥 ${streak} gün üst üste ekledin!`
+    : '🔥 Henüz seri yok, bugün ekleyerek başlat!';
+
+  const { thisMonth, lastMonth } = getMonthComparison();
+  const comparisonEl = document.getElementById('month-comparison-line');
+  if (thisMonth === 0 && lastMonth === 0) {
+    comparisonEl.textContent = '📊 Karşılaştırma için henüz yeterli veri yok.';
+    comparisonEl.className = 'stats-line';
+    return;
+  }
+
+  const diff = thisMonth - lastMonth;
+  const isUp = diff >= 0;
+  const percent = lastMonth !== 0
+    ? Math.round((diff / Math.abs(lastMonth)) * 100)
+    : 100;
+  comparisonEl.innerHTML = `📊 Bu ay ${money(thisMonth)} · Geçen ay ${money(lastMonth)} ` +
+    `<strong class="${isUp ? 'added' : 'removed'}">${isUp ? '▲' : '▼'} %${Math.abs(percent)}</strong>`;
+  comparisonEl.className = 'stats-line';
+}
+
 function drawStatistics() {
   const statistics = getStatistics();
   document.getElementById('stat-today').textContent = signedMoney(statistics.today);
@@ -424,6 +490,7 @@ function drawStatistics() {
   document.getElementById('stat-month').textContent = signedMoney(statistics.month);
   document.getElementById('stat-count').textContent = String(statistics.count);
   drawWeeklyChart();
+  drawStreakAndComparison();
 }
 
 function drawWeeklyChart() {
@@ -466,6 +533,24 @@ function drawTotal() {
   document.getElementById('total').textContent = money(getTotal());
 }
 
+function getForecast() {
+  const total = getTotal();
+  if (!goal || total >= goal) return null;
+
+  const dates = transactions.map(getTransactionDate).filter(Boolean);
+  if (!dates.length) return null;
+
+  const earliest = startOfDay(new Date(Math.min(...dates.map((date) => date.valueOf()))));
+  const daysElapsed = Math.max(1, Math.round((startOfDay(new Date()) - earliest) / 86400000) + 1);
+  const rate = sumTransactionsSince(earliest) / daysElapsed;
+  if (rate <= 0) return null;
+
+  const daysNeeded = Math.ceil((goal - total) / rate);
+  const targetDate = new Date();
+  targetDate.setDate(targetDate.getDate() + daysNeeded);
+  return { daysNeeded, targetDate };
+}
+
 function drawGoal() {
   const body = document.getElementById('goal-body');
   if (!goal) {
@@ -475,6 +560,10 @@ function drawGoal() {
 
   const total = getTotal();
   const percent = Math.min(100, Math.round((total / goal) * 1000) / 10);
+  const forecast = getForecast();
+  const forecastLine = forecast
+    ? `<p class="goal-forecast">📈 Bu hızla gidersen hedefe ~${forecast.daysNeeded} gün sonra (${forecast.targetDate.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}) ulaşırsın.</p>`
+    : '';
   body.innerHTML = `
     <div class="goal-amounts">
       <span>${money(total)} / ${money(goal)}</span>
@@ -482,6 +571,75 @@ function drawGoal() {
     </div>
     <div class="progress">
       <div class="progress-bar" style="width: ${percent}%"></div>
+    </div>
+    ${forecastLine}`;
+}
+
+const WEEKDAY_NAMES = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
+
+function getYearSummary(now = new Date()) {
+  const yearStart = new Date(now.getFullYear(), 0, 1);
+  const yearTransactions = transactions.filter((transaction) => {
+    const date = getTransactionDate(transaction);
+    return date && date >= yearStart;
+  });
+
+  const dayTotals = new Array(7).fill(0);
+  let biggest = null;
+
+  for (const transaction of yearTransactions) {
+    const date = getTransactionDate(transaction);
+    dayTotals[date.getDay()] += transactionValue(transaction);
+
+    if (transaction.type === 'add') {
+      const amount = denominationById.get(transaction.denominationId).value * transaction.quantity;
+      if (!biggest || amount > biggest.amount) biggest = { amount, date };
+    }
+  }
+
+  const total = yearTransactions.reduce((sum, transaction) => sum + transactionValue(transaction), 0);
+  const bestDayIndex = yearTransactions.length ? dayTotals.indexOf(Math.max(...dayTotals)) : null;
+
+  return {
+    year: now.getFullYear(),
+    total,
+    count: yearTransactions.length,
+    bestDayName: bestDayIndex !== null ? WEEKDAY_NAMES[bestDayIndex] : null,
+    biggest,
+  };
+}
+
+function drawYearSummary() {
+  const body = document.getElementById('year-summary-body');
+  const summary = getYearSummary();
+
+  if (!summary.count) {
+    body.innerHTML = `<p class="empty">${summary.year} yılında henüz işlem yok.</p>`;
+    return;
+  }
+
+  const biggestLine = summary.biggest
+    ? `${money(summary.biggest.amount)} (${summary.biggest.date.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' })})`
+    : '-';
+
+  body.innerHTML = `
+    <div class="stats-grid">
+      <div class="stat">
+        <span class="stat-label">Toplam</span>
+        <strong>${signedMoney(summary.total)}</strong>
+      </div>
+      <div class="stat">
+        <span class="stat-label">İşlem</span>
+        <strong>${summary.count}</strong>
+      </div>
+      <div class="stat">
+        <span class="stat-label">En aktif gün</span>
+        <strong>${summary.bestDayName ?? '-'}</strong>
+      </div>
+      <div class="stat">
+        <span class="stat-label">En büyük ekleme</span>
+        <strong>${biggestLine}</strong>
+      </div>
     </div>`;
 }
 
@@ -490,6 +648,7 @@ function draw() {
   drawTotal();
   drawGoal();
   drawStatistics();
+  drawYearSummary();
   drawHistory();
   document.getElementById('undo-button').disabled = transactions.length === 0;
 }

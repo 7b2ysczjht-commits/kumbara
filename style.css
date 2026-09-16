@@ -360,6 +360,22 @@ h2 { margin-top: 28px; }
 
 .chart-label { font-size: 10px; color: var(--text-muted); }
 
+.stats-line {
+  margin: 12px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.stats-line:first-of-type { margin-top: 16px; }
+
+.goal-forecast {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
 .modal-overlay {
   position: fixed;
   inset: 0;
