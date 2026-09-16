@@ -1,0 +1,26 @@
+<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="apple-mobile-web-app-capable" content="yes"><title>🐷 Kumbara v2</title>
+<style>body{margin:0;background:#f6f0ea;font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#241f1b}.app{max-width:520px;margin:auto;padding:25px 15px 40px}h1{text-align:center}.sub{text-align:center;color:#888}.total{background:#241f1b;color:white;border-radius:25px;padding:22px;text-align:center;margin:18px 0}.total b{display:block;font-size:40px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.item{background:white;border-radius:17px;padding:12px}.label{font-weight:bold}.count{color:#888;font-size:13px;margin:4px 0}.controls{display:flex;gap:5px}.controls button,.bulk{border:0;border-radius:10px;height:38px}.controls button{width:38px;font-size:20px}.plus{background:#241f1b;color:white}.qty{width:55px;text-align:center;border:1px solid #ddd;border-radius:10px}.bulk{width:100%;margin-top:7px;background:#eee}.actions{display:flex;gap:8px;margin-top:18px}.actions button{flex:1;height:46px;border:0;border-radius:13px;background:white}.history{background:white;border-radius:17px;padding:15px;margin-top:18px}.row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee}</style></head>
+<body><div class="app"><h1>🐷 Mobil Kumbara</h1><div class="sub">Tek tek veya toplu ekle</div><div class="total">TOPLAM<b id="total">₺0,00</b></div>
+<h2>🪙 Madeni</h2><div class="grid" id="coins"></div><h2>💵 Kâğıt</h2><div class="grid" id="notes"></div>
+<div class="actions"><button onclick="undo()">↩️ Geri al</button><button onclick="clearAll()">🗑️ Boşalt</button></div><div class="history"><b>📜 Son işlemler</b><div id="history"></div></div></div>
+<script>
+const a=[['25k','25 kuruş',.25],['50k','50 kuruş',.5],['1','1 TL',1],['5','5 TL',5],['10','10 TL',10],['20','20 TL',20],['50','50 TL',50],['100','100 TL',100],['200','200 TL',200]];
+let c=JSON.parse(localStorage.kumbaraC||'{}'),h=JSON.parse(localStorage.kumbaraH||'[]');
+const money=x=>'₺'+x.toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2});
+function render(list,id){document.getElementById(id).innerHTML=list.map(x=>`<div class=item><div class=label>${x[1]}</div><div class=count id=c${x[0]}>${c[x[0]]||0} adet</div><div class=controls><button onclick="chg('${x[0]}',-1)">−</button><input class=qty id=q${x[0]} type=number min=1 value=1><button class=plus onclick="chg('${x[0]}',1)">+</button></div><button class=bulk onclick="bulk('${x[0]}')">Toplu ekle</button></div>`).join('')}
+function save(){localStorage.kumbaraC=JSON.stringify(c);localStorage.kumbaraH=JSON.stringify(h)}
+function chg(id,d){let x=a.find(z=>z[0]==id);if(d<0&&(c[id]||0)<1)return;c[id]=(c[id]||0)+d;h.unshift([id,d]);h=h.slice(0,30);save();draw()}
+function bulk(id){let x=a.find(z=>z[0]==id),n=Math.floor(Number(document.getElementById('q'+id).value));if(n<1)return;c[id]=(c[id]||0)+n;h.unshift([id,n]);h=h.slice(0,30);save();draw()}
+function undo(){if(!h.length)return;let x=h.shift();c[x[0]]=Math.max(0,(c[x[0]]||0)-x[1]);save();draw()}
+function clearAll(){
+  const ok = window.confirm('Kumbarayı tamamen boşaltmak istediğine emin misin?');
+  if(!ok) return;
+  c={};
+  h=[];
+  try{localStorage.removeItem('kumbaraC');localStorage.removeItem('kumbaraH');}catch(e){}
+  save();
+  draw();
+  document.querySelectorAll('.qty').forEach(el=>el.value=1);
+}
+function draw(){render(a.slice(0,3),'coins');render(a.slice(3),'notes');let t=a.reduce((s,x)=>s+(c[x[0]]||0)*x[2],0);document.getElementById('total').textContent=money(t);document.getElementById('history').innerHTML=h.length?h.map(x=>{let z=a.find(q=>q[0]==x[0]);return `<div class=row><span>${x[1]} × ${z[1]}</span><b>+${money(x[1]*z[2])}</b></div>`}).join(''):'<p style="color:#999">Henüz işlem yok.</p>'}draw();
+</script></body></html>
