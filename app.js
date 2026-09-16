@@ -239,6 +239,58 @@ function bumpTotal() {
   el.classList.add('bump');
 }
 
+const SOUND_KEY = 'kumbara.v2.soundEnabled';
+
+function isSoundEnabled() {
+  const stored = parseStoredValue(SOUND_KEY, null);
+  return stored === null ? true : stored === true;
+}
+
+function setSoundEnabled(value) {
+  try {
+    localStorage.setItem(SOUND_KEY, JSON.stringify(value));
+  } catch {
+    // The toggle just won't persist across reloads when storage is unavailable.
+  }
+}
+
+let audioContext = null;
+
+function playTone(freqStart, freqEnd, duration = 0.18, volume = 0.12) {
+  try {
+    audioContext ??= new (window.AudioContext || window.webkitAudioContext)();
+    const oscillator = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+    oscillator.connect(gain);
+    gain.connect(audioContext.destination);
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(freqStart, audioContext.currentTime);
+    oscillator.frequency.exponentialRampToValueAtTime(freqEnd, audioContext.currentTime + duration);
+    gain.gain.setValueAtTime(volume, audioContext.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + duration);
+    oscillator.start();
+    oscillator.stop(audioContext.currentTime + duration);
+  } catch {
+    // Some browsers block audio until a user gesture; the app still works silently.
+  }
+}
+
+function playFeedback(kind) {
+  if (!isSoundEnabled()) return;
+
+  if (kind === 'add') playTone(660, 990);
+  else if (kind === 'remove') playTone(660, 440);
+  else playTone(520, 520, 0.1, 0.08);
+
+  if ('vibrate' in navigator) {
+    try {
+      navigator.vibrate(12);
+    } catch {
+      // Vibration just won't happen on devices/browsers that don't support it.
+    }
+  }
+}
+
 function change(denominationId, quantity) {
   const type = quantity > 0 ? 'add' : 'remove';
   if (!updateCount(denominationId, quantity)) return;
@@ -247,6 +299,7 @@ function change(denominationId, quantity) {
   save();
   draw();
   bumpTotal();
+  playFeedback(type);
 }
 
 function bulkAdd(denominationId) {
@@ -277,6 +330,7 @@ function undo() {
   save();
   draw();
   bumpTotal();
+  playFeedback('undo');
 }
 
 function undoTransaction(id) {
@@ -285,6 +339,7 @@ function undoTransaction(id) {
   save();
   draw();
   bumpTotal();
+  playFeedback('undo');
 }
 
 function clearAll() {
@@ -1012,6 +1067,10 @@ function renderSettingsModalBody() {
       <span class="settings-row-label">🔔 Hatırlatıcı</span>
       <span class="settings-row-value">${isReminderEnabled() ? 'Açık' : 'Kapalı'}</span>
     </div>
+    <div class="settings-row clickable" id="settings-sound-row">
+      <span class="settings-row-label">🔊 Ses ve Titreşim</span>
+      <span class="settings-row-value">${isSoundEnabled() ? 'Açık' : 'Kapalı'}</span>
+    </div>
     <div class="modal-actions">
       <button class="modal-cancel" type="button" id="settings-modal-close">Kapat</button>
     </div>`;
@@ -1041,6 +1100,12 @@ function renderSettingsModalBody() {
     }
     renderSettingsModalBody();
     checkDailyReminder();
+  });
+  document.getElementById('settings-sound-row').addEventListener('click', () => {
+    const next = !isSoundEnabled();
+    setSoundEnabled(next);
+    renderSettingsModalBody();
+    if (next) playFeedback('add');
   });
 }
 
