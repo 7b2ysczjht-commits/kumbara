@@ -87,10 +87,15 @@
     </div>
 
     <section class="history" aria-labelledby="history-title">
-      <h2 id="history-title">📜 Son işlemler</h2>
+      <div class="history-header">
+        <h2 id="history-title">📜 Son işlemler</h2>
+        <button class="history-export" id="export-button" type="button" aria-label="Dışa aktar">📤</button>
+      </div>
       <div id="history"></div>
     </section>
   </main>
+
+  <div class="print-only" id="print-area"></div>
 
   <div class="lock-screen" id="lock-screen" hidden>
     <div class="lock-content">
@@ -116,6 +121,20 @@
         <button type="button" class="keypad-empty" tabindex="-1" disabled></button>
         <button type="button" data-key="0">0</button>
         <button type="button" data-key="back" aria-label="Sil">⌫</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="export-modal" hidden>
+    <div class="modal">
+      <h3>📤 Dışa Aktar</h3>
+      <p class="modal-text">İşlem geçmişini indir.</p>
+      <div class="modal-actions">
+        <button class="modal-cancel" type="button" id="export-csv-button">CSV indir</button>
+        <button class="modal-save" type="button" id="export-pdf-button">PDF olarak kaydet</button>
+      </div>
+      <div class="modal-actions">
+        <button class="modal-cancel" type="button" id="export-modal-close">Kapat</button>
       </div>
     </div>
   </div>

@@ -217,6 +217,23 @@ h2 { margin-top: 28px; }
 
 .history h2 { margin: 0; font-size: 1em; }
 
+.history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.history-export {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  background: var(--chip-bg);
+  border-radius: 10px;
+  font-size: 15px;
+}
+
+.modal-actions + .modal-actions { margin-top: 8px; }
+
 .row {
   display: flex;
   justify-content: space-between;
@@ -604,4 +621,27 @@ h2 { margin-top: 28px; }
 @media (max-width: 360px) {
   .grid { grid-template-columns: 1fr; }
   .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.print-only { display: none; }
+
+@media print {
+  body * { visibility: hidden; }
+  #print-area, #print-area * { visibility: visible; }
+  #print-area {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    color: #000;
+    background: #fff;
+  }
+  #print-area table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+  #print-area th, #print-area td {
+    border: 1px solid #ccc;
+    padding: 6px 8px;
+    text-align: left;
+    font-size: 12px;
+  }
 }

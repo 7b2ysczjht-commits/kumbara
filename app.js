@@ -1131,3 +1131,86 @@ document.getElementById('banks-modal').addEventListener('click', (event) => {
 });
 
 updateActiveBankLabel();
+
+function csvEscape(value) {
+  const text = String(value);
+  return /[;"\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function buildTransactionRows() {
+  return transactions.map((transaction) => {
+    const denomination = denominationById.get(transaction.denominationId);
+    const amount = denomination.value * transaction.quantity;
+    const signedAmount = transaction.type === 'add' ? amount : -amount;
+    return {
+      date: formatTime(transaction.createdAt),
+      action: transaction.type === 'add' ? 'Ekleme' : 'Çıkarma',
+      detail: `${transaction.quantity} × ${denomination.label}`,
+      amount: signedAmount,
+    };
+  });
+}
+
+function downloadBlob(content, filename, mime) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+function exportCsv() {
+  const header = ['Tarih', 'Tür', 'Detay', 'Tutar'];
+  const rows = buildTransactionRows().map((row) => [
+    row.date,
+    row.action,
+    row.detail,
+    money(row.amount),
+  ]);
+  const csv = [header, ...rows].map((row) => row.map(csvEscape).join(';')).join('\r\n');
+  downloadBlob('﻿' + csv, `${getActiveBank().name}-islemler.csv`, 'text/csv;charset=utf-8');
+}
+
+function exportPdf() {
+  const bank = getActiveBank();
+  const rowsHtml = buildTransactionRows().map((row) => `
+    <tr>
+      <td>${row.date}</td>
+      <td>${row.action}</td>
+      <td>${row.detail}</td>
+      <td>${signedMoney(row.amount)}</td>
+    </tr>`).join('');
+
+  document.getElementById('print-area').innerHTML = `
+    <h1>${bank.name} — İşlem Geçmişi</h1>
+    <p>Toplam: ${money(getTotal())} · ${new Date().toLocaleDateString('tr-TR')}</p>
+    <table>
+      <thead><tr><th>Tarih</th><th>Tür</th><th>Detay</th><th>Tutar</th></tr></thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>`;
+  window.print();
+}
+
+function closeExportModal() {
+  document.getElementById('export-modal').hidden = true;
+}
+
+document.getElementById('export-button').addEventListener('click', () => {
+  document.getElementById('export-modal').hidden = false;
+});
+document.getElementById('export-modal-close').addEventListener('click', closeExportModal);
+document.getElementById('export-modal').addEventListener('click', (event) => {
+  if (event.target.id === 'export-modal') closeExportModal();
+});
+document.getElementById('export-csv-button').addEventListener('click', () => {
+  exportCsv();
+  closeExportModal();
+});
+document.getElementById('export-pdf-button').addEventListener('click', () => {
+  exportPdf();
+  closeExportModal();
+});
