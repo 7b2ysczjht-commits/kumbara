@@ -1100,7 +1100,19 @@ function renderCloudModalBody() {
     <div class="modal-actions">
       <button class="modal-cancel" type="button" id="cloud-modal-close">Vazgeç</button>
       <button class="modal-save" type="button" id="cloud-modal-signin">Google ile Giriş Yap</button>
-    </div>`;
+    </div>
+    <p class="modal-divider">veya e-posta ile</p>
+    <label for="email-input">E-posta</label>
+    <input type="email" id="email-input" autocomplete="email" placeholder="ornek@mail.com">
+    <label for="password-input">Şifre</label>
+    <input type="password" id="password-input" autocomplete="current-password" placeholder="En az 6 karakter">
+    <p class="modal-error" id="email-auth-error" hidden></p>
+    <div class="modal-actions">
+      <button class="modal-cancel" type="button" id="email-signin-button">Giriş Yap</button>
+      <button class="modal-save" type="button" id="email-register-button">Kayıt Ol</button>
+    </div>
+    <button type="button" class="link-button" id="forgot-password-button">Şifremi unuttum</button>`;
+
   document.getElementById('cloud-modal-close').addEventListener('click', closeCloudModal);
   document.getElementById('cloud-modal-signin').addEventListener('click', async () => {
     try {
@@ -1110,6 +1122,77 @@ function renderCloudModalBody() {
       window.alert('Giriş hatası: ' + (error && (error.message || error.code || JSON.stringify(error))));
     }
   });
+
+  const emailAuthError = document.getElementById('email-auth-error');
+  function showEmailAuthError(message) {
+    emailAuthError.textContent = message;
+    emailAuthError.hidden = false;
+  }
+
+  document.getElementById('email-signin-button').addEventListener('click', async () => {
+    const email = document.getElementById('email-input').value.trim();
+    const password = document.getElementById('password-input').value;
+    emailAuthError.hidden = true;
+    if (!email || !password) {
+      showEmailAuthError('E-posta ve şifre gerekli.');
+      return;
+    }
+    try {
+      await auth.signInWithEmailAndPassword(email, password);
+      closeCloudModal();
+    } catch (error) {
+      showEmailAuthError(translateAuthError(error));
+    }
+  });
+
+  document.getElementById('email-register-button').addEventListener('click', async () => {
+    const email = document.getElementById('email-input').value.trim();
+    const password = document.getElementById('password-input').value;
+    emailAuthError.hidden = true;
+    if (!email || !password) {
+      showEmailAuthError('E-posta ve şifre gerekli.');
+      return;
+    }
+    if (password.length < 6) {
+      showEmailAuthError('Şifre en az 6 karakter olmalı.');
+      return;
+    }
+    try {
+      await auth.createUserWithEmailAndPassword(email, password);
+      closeCloudModal();
+    } catch (error) {
+      showEmailAuthError(translateAuthError(error));
+    }
+  });
+
+  document.getElementById('forgot-password-button').addEventListener('click', async () => {
+    const email = document.getElementById('email-input').value.trim();
+    if (!email) {
+      showEmailAuthError('Şifre sıfırlamak için önce e-posta adresini gir.');
+      return;
+    }
+    try {
+      await auth.sendPasswordResetEmail(email);
+      window.alert('Şifre sıfırlama e-postası gönderildi: ' + email);
+    } catch (error) {
+      showEmailAuthError(translateAuthError(error));
+    }
+  });
+}
+
+function translateAuthError(error) {
+  const messages = {
+    'auth/invalid-email': 'Geçersiz e-posta adresi.',
+    'auth/user-not-found': 'Bu e-posta ile kayıtlı hesap bulunamadı.',
+    'auth/wrong-password': 'Şifre yanlış.',
+    'auth/invalid-credential': 'E-posta veya şifre hatalı.',
+    'auth/email-already-in-use': 'Bu e-posta zaten kayıtlı, giriş yapmayı dene.',
+    'auth/weak-password': 'Şifre çok zayıf, en az 6 karakter olmalı.',
+    'auth/too-many-requests': 'Çok fazla deneme yapıldı, biraz sonra tekrar dene.',
+    'auth/network-request-failed': 'İnternet bağlantısı yok.',
+  };
+  const code = error && error.code;
+  return messages[code] || ('Bir hata oluştu: ' + (error?.message || code || 'bilinmeyen hata'));
 }
 
 function isNativeApp() {
