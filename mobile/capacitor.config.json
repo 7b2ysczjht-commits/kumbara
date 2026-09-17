@@ -2,6 +2,10 @@
   "appId": "com.kumbara.app",
   "appName": "Mobil Kumbara",
   "webDir": "www",
+  "server": {
+    "url": "https://7b2ysczjht-commits.github.io/kumbara/",
+    "cleartext": false
+  },
   "plugins": {
     "FirebaseAuthentication": {
       "skipNativeAuth": false,
