@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:background="#241f1b"
+    android:padding="16dp">
+
+    <TextView
+        android:id="@+id/widget_bank_name"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Kumbaram"
+        android:textColor="#a89e94"
+        android:textSize="12sp" />
+
+    <TextView
+        android:id="@+id/widget_total"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="₺0,00"
+        android:textColor="#f6f0ea"
+        android:textSize="22sp"
+        android:textStyle="bold" />
+
+</LinearLayout>

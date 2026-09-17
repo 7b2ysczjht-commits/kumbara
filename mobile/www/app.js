@@ -606,7 +606,18 @@ function getTotal() {
 }
 
 function drawTotal() {
-  document.getElementById('total').textContent = money(getTotal());
+  const total = getTotal();
+  document.getElementById('total').textContent = money(total);
+  updateHomeWidget(total);
+}
+
+function updateHomeWidget(total) {
+  const plugin = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.KumbaraWidget;
+  if (!plugin) return;
+  const bank = getActiveBank();
+  plugin.updateWidget({ total: money(total), bankName: bank.name }).catch(() => {
+    // Widget update is best-effort — the app stays fully usable without it.
+  });
 }
 
 function getForecast() {
@@ -942,7 +953,20 @@ document.getElementById('pin-modal').addEventListener('click', (event) => {
   if (event.target.id === 'pin-modal') closePinModal();
 });
 
-if (hasPin()) showLockScreen();
+if (hasPin()) {
+  showLockScreen();
+  if (isBiometricEnabled()) {
+    document.getElementById('biometric-retry-button').hidden = false;
+    tryBiometricUnlock().then((success) => {
+      if (success) hideLockScreen();
+    });
+  }
+}
+
+document.getElementById('biometric-retry-button').addEventListener('click', async () => {
+  const success = await tryBiometricUnlock();
+  if (success) hideLockScreen();
+});
 
 const firebaseConfig = {
   apiKey: 'AIzaSyDafoqx2XQtP9a2LOJHHXe31thNAXXsSys',
@@ -1322,6 +1346,15 @@ function renderSettingsModalBody() {
       <span class="settings-row-label">🔊 Ses ve Titreşim</span>
       <span class="settings-row-value">${isSoundEnabled() ? 'Açık' : 'Kapalı'}</span>
     </div>
+    ${isNativeApp() ? `
+    <div class="settings-row clickable" id="settings-biometric-row">
+      <span class="settings-row-label">👆 Biyometrik Kilit</span>
+      <span class="settings-row-value">${isBiometricEnabled() ? 'Açık' : 'Kapalı'}</span>
+    </div>` : ''}
+    <div class="settings-row clickable" id="settings-backup-row">
+      <span class="settings-row-label">💾 Yedekle / Geri Yükle</span>
+      <span class="settings-row-value">›</span>
+    </div>
     <div class="modal-actions">
       <button class="modal-cancel" type="button" id="settings-modal-close">Kapat</button>
     </div>`;
@@ -1358,6 +1391,29 @@ function renderSettingsModalBody() {
     renderSettingsModalBody();
     if (next) playFeedback('add');
   });
+  document.getElementById('settings-backup-row').addEventListener('click', () => {
+    closeSettingsModal();
+    openBackupModal();
+  });
+  const biometricRow = document.getElementById('settings-biometric-row');
+  if (biometricRow) {
+    biometricRow.addEventListener('click', async () => {
+      if (!hasPin()) {
+        window.alert('Biyometrik kilidi açmadan önce bir PIN belirlemelisin.');
+        return;
+      }
+      const next = !isBiometricEnabled();
+      if (next) {
+        const available = await isBiometricAvailable();
+        if (!available) {
+          window.alert('Bu cihazda kullanılabilir bir parmak izi/yüz tanıma bulunamadı.');
+          return;
+        }
+      }
+      setBiometricEnabled(next);
+      renderSettingsModalBody();
+    });
+  }
 }
 
 function openSettingsModal() {
@@ -1642,3 +1698,117 @@ function checkDailyReminder() {
 }
 
 checkDailyReminder();
+
+function closeBackupModal() {
+  document.getElementById('backup-modal').hidden = true;
+  document.getElementById('backup-error').hidden = true;
+  document.getElementById('backup-file-input').value = '';
+}
+
+function openBackupModal() {
+  document.getElementById('backup-modal').hidden = false;
+}
+
+function exportBackup() {
+  syncActiveBankState();
+  const payload = {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    banks,
+    activeBankId,
+  };
+  downloadBlob(
+    JSON.stringify(payload, null, 2),
+    `kumbara-yedek-${new Date().toISOString().slice(0, 10)}.json`,
+    'application/json',
+  );
+}
+
+function importBackupFromText(text) {
+  const data = JSON.parse(text);
+  if (!Array.isArray(data.banks) || !data.banks.length) {
+    throw new Error('Geçersiz yedek dosyası.');
+  }
+  for (const unsubscribe of sharedBankUnsubscribers.values()) unsubscribe();
+  sharedBankUnsubscribers.clear();
+
+  banks = data.banks.map(sanitiseBank);
+  activeBankId = banks.some((bank) => bank.id === data.activeBankId) ? data.activeBankId : banks[0].id;
+  loadActiveBankState();
+  banks.filter((bank) => bank.shared).forEach((bank) => subscribeSharedBank(bank.id));
+  save();
+  draw();
+  updateActiveBankLabel();
+}
+
+document.getElementById('backup-modal-close').addEventListener('click', closeBackupModal);
+document.getElementById('backup-modal').addEventListener('click', (event) => {
+  if (event.target.id === 'backup-modal') closeBackupModal();
+});
+document.getElementById('backup-export-button').addEventListener('click', exportBackup);
+document.getElementById('backup-file-input').addEventListener('change', async (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+  const errorEl = document.getElementById('backup-error');
+  errorEl.hidden = true;
+
+  const confirmed = window.confirm('Geri yükleme, mevcut tüm kumbaralarının yerini alacak. Emin misin?');
+  if (!confirmed) {
+    event.target.value = '';
+    return;
+  }
+
+  try {
+    const text = await file.text();
+    importBackupFromText(text);
+    closeBackupModal();
+  } catch (error) {
+    errorEl.textContent = 'Yedek dosyası okunamadı: ' + (error?.message || 'bilinmeyen hata');
+    errorEl.hidden = false;
+  }
+});
+
+const BIOMETRIC_KEY = 'kumbara.v2.biometricEnabled';
+
+function isBiometricEnabled() {
+  return parseStoredValue(BIOMETRIC_KEY, false) === true;
+}
+
+function setBiometricEnabled(value) {
+  try {
+    localStorage.setItem(BIOMETRIC_KEY, JSON.stringify(value));
+  } catch {
+    // The toggle just won't persist across reloads when storage is unavailable.
+  }
+}
+
+function getBiometricPlugin() {
+  return window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.NativeBiometric;
+}
+
+async function isBiometricAvailable() {
+  const plugin = getBiometricPlugin();
+  if (!plugin) return false;
+  try {
+    const result = await plugin.isAvailable();
+    return Boolean(result && result.isAvailable);
+  } catch {
+    return false;
+  }
+}
+
+async function tryBiometricUnlock() {
+  const plugin = getBiometricPlugin();
+  if (!plugin || !isBiometricEnabled()) return false;
+  try {
+    await plugin.verifyIdentity({
+      reason: 'Kumbaranı açmak için doğrula',
+      title: 'Kumbara Kilidi',
+      subtitle: '',
+      description: '',
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}

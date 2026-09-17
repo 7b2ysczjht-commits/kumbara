@@ -639,6 +639,18 @@ h2 { margin-top: 28px; }
 
 .lock-error[hidden] { display: none; }
 
+.biometric-retry {
+  padding: 10px 18px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--chip-bg);
+  color: var(--text);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.biometric-retry[hidden] { display: none; }
+
 .keypad {
   display: grid;
   grid-template-columns: repeat(3, 64px);

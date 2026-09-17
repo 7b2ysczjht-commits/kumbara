@@ -113,6 +113,7 @@
         <span class="pin-dot"></span>
       </div>
       <p class="lock-error" id="lock-error" hidden>Yanlış PIN, tekrar dene</p>
+      <button type="button" class="biometric-retry" id="biometric-retry-button" hidden>👆 Parmak izi ile aç</button>
       <div class="keypad" id="keypad">
         <button type="button" data-key="1">1</button>
         <button type="button" data-key="2">2</button>
@@ -141,6 +142,20 @@
       <div class="modal-actions">
         <button class="modal-cancel" type="button" id="export-modal-close">Kapat</button>
       </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="backup-modal" hidden>
+    <div class="modal">
+      <h3>💾 Yedekle / Geri Yükle</h3>
+      <p class="modal-text">Tüm kumbaralarını tek bir dosyaya yedekle veya önceki bir yedeği geri yükle.</p>
+      <div class="modal-actions">
+        <button class="modal-cancel" type="button" id="backup-modal-close">Kapat</button>
+        <button class="modal-save" type="button" id="backup-export-button">Yedek İndir</button>
+      </div>
+      <label for="backup-file-input">Yedekten geri yükle</label>
+      <input type="file" id="backup-file-input" accept="application/json">
+      <p class="modal-error" id="backup-error" hidden></p>
     </div>
   </div>
 

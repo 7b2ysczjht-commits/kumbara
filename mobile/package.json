@@ -14,7 +14,8 @@
     "@capacitor-firebase/authentication": "^8.5.2",
     "@capacitor/android": "^8.5.2",
     "@capacitor/cli": "^8.5.2",
-    "@capacitor/core": "^8.5.2"
+    "@capacitor/core": "^8.5.2",
+    "capacitor-native-biometric": "^4.2.2"
   },
   "devDependencies": {
     "@capacitor/assets": "^3.0.5"
