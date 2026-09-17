@@ -199,6 +199,16 @@
     </div>
   </div>
 
+  <script>
+    window.addEventListener('error', function (event) {
+      try {
+        var msg = 'JS Hatası: ' + event.message + '\n' + (event.filename || '') + ':' + event.lineno + ':' + event.colno;
+        if (window.__kumbaraErrorShown) return;
+        window.__kumbaraErrorShown = true;
+        window.alert(msg);
+      } catch (e) {}
+    });
+  </script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
