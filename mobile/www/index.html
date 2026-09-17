@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Kumbara">
+  <meta name="theme-color" content="#f6f0ea">
+  <meta name="description" content="Günlük birikimlerini kolayca takip et.">
+  <title>🐱 Kumbara v2</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="app">
+    <header>
+      <div class="header-actions">
+        <button class="header-button" id="settings-button" type="button" aria-label="Ayarlar">⚙️</button>
+      </div>
+      <h1>🐱 Mobil Kumbara</h1>
+      <p class="sub">Tek tek veya toplu ekle</p>
+    </header>
+
+    <div class="reminder-banner" id="reminder-banner" hidden>
+      <span>🔔 Bugün henüz kumbaraya para eklemedin!</span>
+      <button type="button" id="reminder-dismiss" aria-label="Kapat">✕</button>
+    </div>
+
+    <button class="bank-switcher" id="bank-switcher-button" type="button">
+      🏦 <span id="active-bank-name">Kumbaram</span> ▾
+    </button>
+
+    <section class="total" aria-live="polite" aria-label="Toplam birikim">
+      <span>TOPLAM</span>
+      <strong id="total">₺0,00</strong>
+    </section>
+
+    <section class="goal" aria-labelledby="goal-title">
+      <div class="goal-header">
+        <h2 id="goal-title">🎯 Hedef</h2>
+        <button class="goal-edit" type="button" data-action="set-goal" aria-label="Hedefi düzenle">✏️</button>
+      </div>
+      <div id="goal-body"></div>
+    </section>
+
+    <section class="stats" aria-labelledby="stats-title">
+      <h2 id="stats-title">📊 İstatistikler</h2>
+      <div class="stats-grid">
+        <div class="stat">
+          <span class="stat-label">Bugün</span>
+          <strong id="stat-today">₺0,00</strong>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Bu hafta</span>
+          <strong id="stat-week">₺0,00</strong>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Bu ay</span>
+          <strong id="stat-month">₺0,00</strong>
+        </div>
+        <div class="stat">
+          <span class="stat-label">İşlem</span>
+          <strong id="stat-count">0</strong>
+        </div>
+      </div>
+      <div class="chart" id="weekly-chart" aria-label="Son 7 günün birikim grafiği"></div>
+      <p class="stats-line" id="streak-line"></p>
+      <p class="stats-line" id="month-comparison-line"></p>
+    </section>
+
+    <section class="stats" aria-labelledby="year-summary-title">
+      <h2 id="year-summary-title">📅 Bu Yıl</h2>
+      <div id="year-summary-body"></div>
+    </section>
+
+    <section aria-labelledby="coins-title">
+      <h2 id="coins-title">🪙 Madeni</h2>
+      <div class="grid" id="coins"></div>
+    </section>
+
+    <section aria-labelledby="notes-title">
+      <h2 id="notes-title">💵 Kâğıt</h2>
+      <div class="grid" id="notes"></div>
+    </section>
+
+    <div class="actions">
+      <button class="action" id="undo-button" type="button">↩️ Geri al</button>
+      <button class="action" id="clear-button" type="button">🗑️ Boşalt</button>
+    </div>
+
+    <section class="history" aria-labelledby="history-title">
+      <div class="history-header">
+        <h2 id="history-title">📜 Son işlemler</h2>
+        <button class="history-export" id="export-button" type="button" aria-label="Dışa aktar">📤</button>
+      </div>
+      <div id="history"></div>
+    </section>
+  </main>
+
+  <div class="print-only" id="print-area"></div>
+
+  <div class="lock-screen" id="lock-screen" hidden>
+    <div class="lock-content">
+      <div class="lock-icon">🐱</div>
+      <p class="lock-title">Kumbara kilitli</p>
+      <div class="pin-dots" id="pin-dots">
+        <span class="pin-dot"></span>
+        <span class="pin-dot"></span>
+        <span class="pin-dot"></span>
+        <span class="pin-dot"></span>
+      </div>
+      <p class="lock-error" id="lock-error" hidden>Yanlış PIN, tekrar dene</p>
+      <div class="keypad" id="keypad">
+        <button type="button" data-key="1">1</button>
+        <button type="button" data-key="2">2</button>
+        <button type="button" data-key="3">3</button>
+        <button type="button" data-key="4">4</button>
+        <button type="button" data-key="5">5</button>
+        <button type="button" data-key="6">6</button>
+        <button type="button" data-key="7">7</button>
+        <button type="button" data-key="8">8</button>
+        <button type="button" data-key="9">9</button>
+        <button type="button" class="keypad-empty" tabindex="-1" disabled></button>
+        <button type="button" data-key="0">0</button>
+        <button type="button" data-key="back" aria-label="Sil">⌫</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="export-modal" hidden>
+    <div class="modal">
+      <h3>📤 Dışa Aktar</h3>
+      <p class="modal-text">İşlem geçmişini indir.</p>
+      <div class="modal-actions">
+        <button class="modal-cancel" type="button" id="export-csv-button">CSV indir</button>
+        <button class="modal-save" type="button" id="export-pdf-button">PDF olarak kaydet</button>
+      </div>
+      <div class="modal-actions">
+        <button class="modal-cancel" type="button" id="export-modal-close">Kapat</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="banks-modal" hidden>
+    <div class="modal">
+      <h3>🏦 Kumbaralarım</h3>
+      <div id="banks-modal-body"></div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="settings-modal" hidden>
+    <div class="modal">
+      <h3>⚙️ Ayarlar</h3>
+      <div id="settings-modal-body"></div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="cloud-modal" hidden>
+    <div class="modal">
+      <h3>☁️ Bulut Senkronizasyonu</h3>
+      <div id="cloud-modal-body"></div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="pin-modal" hidden>
+    <div class="modal">
+      <h3>🔒 PIN Kilidi</h3>
+      <div id="pin-modal-body"></div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="goal-modal" hidden>
+    <div class="modal">
+      <h3>🎯 Hedef Belirle</h3>
+      <label for="goal-input">Hedef tutarı (₺)</label>
+      <input type="number" id="goal-input" min="1" step="1" inputmode="numeric" placeholder="20000">
+      <div class="modal-actions">
+        <button class="modal-cancel" id="goal-cancel" type="button">Vazgeç</button>
+        <button class="modal-save" id="goal-save" type="button">Kaydet</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
