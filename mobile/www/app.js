@@ -844,6 +844,51 @@ async function verifyPin(pin) {
   }
 }
 
+const BIOMETRIC_KEY = 'kumbara.v2.biometricEnabled';
+
+function isBiometricEnabled() {
+  return parseStoredValue(BIOMETRIC_KEY, false) === true;
+}
+
+function setBiometricEnabled(value) {
+  try {
+    localStorage.setItem(BIOMETRIC_KEY, JSON.stringify(value));
+  } catch {
+    // The toggle just won't persist across reloads when storage is unavailable.
+  }
+}
+
+function getBiometricPlugin() {
+  return window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.NativeBiometric;
+}
+
+async function isBiometricAvailable() {
+  const plugin = getBiometricPlugin();
+  if (!plugin) return false;
+  try {
+    const result = await plugin.isAvailable();
+    return Boolean(result && result.isAvailable);
+  } catch {
+    return false;
+  }
+}
+
+async function tryBiometricUnlock() {
+  const plugin = getBiometricPlugin();
+  if (!plugin || !isBiometricEnabled()) return false;
+  try {
+    await plugin.verifyIdentity({
+      reason: 'Kumbaranı açmak için doğrula',
+      title: 'Kumbara Kilidi',
+      subtitle: '',
+      description: '',
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 let pinBuffer = '';
 
 function updatePinDots() {
@@ -1768,47 +1813,3 @@ document.getElementById('backup-file-input').addEventListener('change', async (e
   }
 });
 
-const BIOMETRIC_KEY = 'kumbara.v2.biometricEnabled';
-
-function isBiometricEnabled() {
-  return parseStoredValue(BIOMETRIC_KEY, false) === true;
-}
-
-function setBiometricEnabled(value) {
-  try {
-    localStorage.setItem(BIOMETRIC_KEY, JSON.stringify(value));
-  } catch {
-    // The toggle just won't persist across reloads when storage is unavailable.
-  }
-}
-
-function getBiometricPlugin() {
-  return window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.NativeBiometric;
-}
-
-async function isBiometricAvailable() {
-  const plugin = getBiometricPlugin();
-  if (!plugin) return false;
-  try {
-    const result = await plugin.isAvailable();
-    return Boolean(result && result.isAvailable);
-  } catch {
-    return false;
-  }
-}
-
-async function tryBiometricUnlock() {
-  const plugin = getBiometricPlugin();
-  if (!plugin || !isBiometricEnabled()) return false;
-  try {
-    await plugin.verifyIdentity({
-      reason: 'Kumbaranı açmak için doğrula',
-      title: 'Kumbara Kilidi',
-      subtitle: '',
-      description: '',
-    });
-    return true;
-  } catch {
-    return false;
-  }
-}
