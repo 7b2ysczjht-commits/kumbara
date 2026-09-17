@@ -1106,8 +1106,8 @@ function renderCloudModalBody() {
     try {
       await signInWithGoogle();
       closeCloudModal();
-    } catch {
-      // The user closed the sign-in flow or it failed — they can just try again.
+    } catch (error) {
+      window.alert('Giriş hatası: ' + (error && (error.message || error.code || JSON.stringify(error))));
     }
   });
 }
@@ -1117,10 +1117,14 @@ function isNativeApp() {
 }
 
 async function signInWithGoogle() {
-  if (isNativeApp() && window.Capacitor.Plugins && window.Capacitor.Plugins.FirebaseAuthentication) {
+  const nativeAvailable = isNativeApp() && window.Capacitor.Plugins && window.Capacitor.Plugins.FirebaseAuthentication;
+  if (!nativeAvailable && isNativeApp()) {
+    throw new Error('Native uygulama tespit edildi ama FirebaseAuthentication eklentisi bulunamadı.');
+  }
+  if (nativeAvailable) {
     const result = await window.Capacitor.Plugins.FirebaseAuthentication.signInWithGoogle();
     const idToken = result?.credential?.idToken;
-    if (!idToken) throw new Error('No ID token returned from native Google sign-in');
+    if (!idToken) throw new Error('Native girişten idToken dönmedi: ' + JSON.stringify(result));
     const credential = firebase.auth.GoogleAuthProvider.credential(idToken);
     await firebase.auth().signInWithCredential(credential);
     return;
